@@ -10,30 +10,31 @@
 <style>
 @page { size: A4 landscape; margin: 0; }
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { background: #fff; color: #000; }
+html, body { background: #ddd; color: #000; }
 body {
   font-family: 'Times New Roman', Times, serif;
-  padding: 10px;
+  padding: 6mm;
 }
 
-/* A4 landscape @96dpi: 1123 × 794 */
+/* each sheet = exactly one A4 landscape page */
 .sheet {
-  width: 1123px;
-  height: 1588px;              /* 2 × A4 landscape height */
-  margin: 0 auto;
-  padding: 10px 12px;
+  width: 297mm;
+  height: 210mm;
+  margin: 0 auto 6mm;
+  padding: 4mm 5mm;
+  background: #fff;
   border: 1px solid #000;
   column-count: 3;
-  column-gap: 10px;
+  column-gap: 4mm;
   column-fill: auto;           /* fill col1 top→bottom, then col2, then col3 */
   column-rule: 1px solid #000;
-  background:
-    linear-gradient(#000, #000) left 794px / 100% 1px no-repeat;  /* page divider */
+  page-break-after: always;
+  overflow: hidden;
   font-size: 10px;
   line-height: 1.32;
 }
 
-.sheet h1 { display: none; }    /* title hidden — it's just the top-of-file banner */
+.sheet h1 { display: none; }
 .sheet h2 {
   font-family: Arial, Helvetica, sans-serif;
   font-size: 11px;
@@ -98,28 +99,44 @@ body {
 .katex { font-size: 1em !important; }
 
 @media print {
+  html, body { background: #fff; }
   body { padding: 0; }
-  .sheet { border: none; }
+  .sheet { border: none; margin: 0; box-shadow: none; }
 }
 </style>
 </head>
 <body>
 
-<div class="sheet" id="sheet">Loading cheatsheet.md…</div>
+<div class="sheet" id="page1">Loading cheatsheet.md…</div>
+<div class="sheet" id="page2"></div>
 
 <script>
 (async () => {
   const res = await fetch('cheatsheet.md');
   const md  = await res.text();
-  const el  = document.getElementById('sheet');
-  el.innerHTML = marked.parse(md);
-  renderMathInElement(el, {
+
+  const page1 = document.getElementById('page1');
+  const page2 = document.getElementById('page2');
+  page1.innerHTML = marked.parse(md);
+
+  // render math first, since it changes element heights
+  renderMathInElement(page1, {
     delimiters: [
       { left: '$$', right: '$$', display: true },
       { left: '$',  right: '$',  display: false }
     ],
     throwOnError: false
   });
+
+  // give layout a tick, then move overflowing blocks to page 2
+  await new Promise(r => requestAnimationFrame(r));
+
+  // with column-fill:auto + fixed height, overflow grows horizontally:
+  // scrollWidth > clientWidth means content didn't fit in 3 columns.
+  while (page1.scrollWidth > page1.clientWidth + 1 && page1.lastElementChild) {
+    const el = page1.lastElementChild;
+    page2.insertBefore(el, page2.firstChild);
+  }
 })();
 </script>
 </body>

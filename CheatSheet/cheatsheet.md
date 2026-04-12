@@ -1,10 +1,10 @@
-# NLP Cheat Sheet — From Word Vectors to LLMs
+# Modern NLP
 
 ---
 
 ## 1. Word Embeddings
 
-**Key idea.** Replace atomic one-hot $\mathbf{e}_w \in \{0,1\}^{|V|}$ (always orthogonal, $|V|\approx 10^5$) with dense $\mathbf{e}_w \in \mathbb{R}^d$, $d \ll |V|$, so that *geometry encodes meaning*. Foundation: **distributional hypothesis** — words appearing in similar contexts have similar meanings.
+**Key idea.** Replace atomic one-hot $\mathbf{e}_w \in \{0,1\}^{|V|}$ (always orthogonal, $|V|\approx 10^5$) with dense $\mathbf{e}_w \in \mathbb{R}^d$, $d \ll |V|$, so that _geometry encodes meaning_. Foundation: **distributional hypothesis** — words appearing in similar contexts have similar meanings.
 
 ---
 
@@ -13,8 +13,6 @@
 - **CBOW** — predict center $w_t$ from averaged context $\{w_{t-k},\ldots,w_{t+k}\}$.
 - **Skip-gram** — predict each context word from center $w_t$; generates $k$ training pairs per center ⇒ more updates for rare words than CBOW.
 - **Negative sampling** — replace the $|V|$-softmax with binary classification over $k$ noise samples ⇒ $\mathcal{O}(k)$ instead of $\mathcal{O}(|V|)$.
-
-**Linear analogy.** $\mathbf{e}_{\text{king}} - \mathbf{e}_{\text{man}} + \mathbf{e}_{\text{woman}} \approx \mathbf{e}_{\text{queen}}$ — meaning lives in *vector differences*.
 
 ---
 
@@ -26,20 +24,20 @@ $$J = \sum_{i,j} f(X_{ij}) \left( w_i^\top \tilde w_j + b_i + \tilde b_j - \log 
 
 $$f(x) = (x/x_{\max})^\alpha \ \text{if}\ x < x_{\max},\ \text{else}\ 1$$
 
-GloVe *explicitly* factorizes the log co-occurrence matrix; Word2Vec *implicitly* factorizes the shifted PMI matrix — equivalent in theory, different inductive biases in practice.
+GloVe _explicitly_ factorizes the log co-occurrence matrix; Word2Vec _implicitly_ factorizes the shifted PMI matrix — equivalent in theory, different inductive biases in practice.
 
 ---
 
 ### Issues left open
 
-- Both W2V and GloVe are **static**: one vector per word-type ⇒ *polysemy* ("bank" = finance + river in one vector).
+- Both W2V and GloVe are **static**: one vector per word-type ⇒ _polysemy_
 - CBOW averages context embeddings ⇒ destroys word order and individual identity (bag-of-words over window).
 
 ---
 
 ### ⚠ Gotcha
 
-*If two words never co-occur but appear in identical contexts, can one-hot capture their similarity?* No — they remain orthogonal regardless of any evidence. *Can smoothing fix this?* Also no — smoothing redistributes probability mass; it cannot create similarity structure over atomic symbols.
+_If two words never co-occur but appear in identical contexts, can one-hot capture their similarity?_ No — they remain orthogonal regardless of any evidence. _Can smoothing fix this?_ Also no — smoothing redistributes probability mass; it cannot create similarity structure over atomic symbols.
 
 ---
 
@@ -51,14 +49,14 @@ $$P(w_t \mid w_{1:t-1}) \approx P(w_t \mid w_{t-n+1:t-1})$$
 
 **MLE estimate:** $\hat P(w_t \mid \text{ctx}) = C(\text{ctx}, w_t) / C(\text{ctx})$.
 
-**Evaluation — Perplexity:** $PP(W) = P(W)^{-1/N}$ = exponentiated average NLL.
+**Perplexity:** $PP(W) = P(W)^{-1/N}$ = exponentiated average NLL.
 
 ---
 
 ### Smoothing
 
 - **Laplace / add-$\alpha$** — pretend every event was seen $\alpha$ extra times.
-- **Kneser–Ney** — uses *continuation probability*: how many distinct contexts a word appears in, not raw frequency.
+- **Kneser–Ney** — uses _continuation probability_: how many distinct contexts a word appears in, not raw frequency.
 
 ---
 
@@ -68,13 +66,13 @@ $$P(w_t \mid w_{1:t-1}) \approx P(w_t \mid w_{t-n+1:t-1})$$
 - **No cross-word generalization**: cat and dog are atoms even if synonyms.
 - **Hard context cap** at $n-1$ tokens.
 
-**Next step →** Neural LMs share *embedding parameters* across contexts, enabling generalization across similar words.
+**Next step →** Neural LMs share _embedding parameters_ across contexts, enabling generalization across similar words.
 
 ---
 
 ### ⚠ Gotcha
 
-*Why can't even perfect smoothing generalize across synonyms?* Because there is no **distributed representation**: each word is an atomic symbol, and smoothing only redistributes mass — it never creates similarity structure between different symbols.
+_Why can't even perfect smoothing generalize across synonyms?_ Because there is no **distributed representation**: each word is an atomic symbol, and smoothing only redistributes mass — it never creates similarity structure between different symbols.
 
 ---
 
@@ -92,11 +90,11 @@ x_t:  (B, d)    # token embedding
 h_t:  (B, h)    # hidden state
 ```
 
-**Key property.** The hidden state $h_t$ theoretically encodes *all* previous tokens ⇒ unlimited context vs n-gram's $n-1$. Parameter sharing across time = translation invariance.
+**Key property.** The hidden state $h_t$ theoretically encodes _all_ previous tokens ⇒ unlimited context vs n-gram's $n-1$. Parameter sharing across time = translation invariance.
 
 ---
 
-### RNN issue — vanishing gradient
+### Vanishing gradient
 
 $$\frac{\partial \mathcal{L}}{\partial h_0} = \prod_{t=1}^{T} \frac{\partial h_t}{\partial h_{t-1}} \to 0 \quad \text{when } \|W_h\|_2 < 1$$
 
@@ -125,13 +123,13 @@ Solves the vanishing-gradient problem of the vanilla RNN. Still sequential ⇒ n
 
 ### ⚠ Gotcha
 
-*If the forget gate always outputs 1, what does LSTM reduce to?* An unbounded accumulator that never forgets — the cell state grows without limit. The forget gate is what enables **selective, bounded** memory.
+_If the forget gate always outputs 1, what does LSTM reduce to?_ An unbounded accumulator that never forgets — the cell state grows without limit. The forget gate is what enables **selective, bounded** memory.
 
 ---
 
 ## 4. Seq2Seq
 
-**Key idea.** Encoder–decoder for variable-length → variable-length mapping (machine translation, summarization). Encoder RNN compresses the source into a *single* context vector $c$; decoder RNN generates the target autoregressively conditioned on $c$.
+**Key idea.** Encoder–decoder for variable-length → variable-length mapping (machine translation, summarization). Encoder RNN compresses the source into a _single_ context vector $c$; decoder RNN generates the target autoregressively conditioned on $c$.
 
 ```
 Encoder: RNN over source x_1..x_n
@@ -140,27 +138,27 @@ Decoder: P(y_t | y_1..y_{t-1}, c)
          → autoregressively generates y_1..y_m
 ```
 
-**Training — teacher forcing:** feed the *gold* $y_{t-1}$, not the model's prediction, so each step is an independent classification on a clean prefix.
+**Training — teacher forcing:** feed the _gold_ $y_{t-1}$, not the model's prediction, so each step is an independent classification on a clean prefix.
 
 ---
 
 ### Issue — the bottleneck
 
-The entire source sequence must fit into one fixed-size vector $c = h_n$. Capacity is bounded ⇒ long sequences suffer catastrophic forgetting *inside* the encoder.
+The entire source sequence must fit into one fixed-size vector $c = h_n$. Capacity is bounded ⇒ long sequences suffer catastrophic forgetting _inside_ the encoder.
 
-**Next step →** Attention: compute a separate, *dynamic* context per decoder step, pulling from *all* encoder hidden states rather than just the last.
+**Next step →** Attention: compute a separate, _dynamic_ context per decoder step, pulling from _all_ encoder hidden states rather than just the last.
 
 ---
 
 ### ⚠ Gotcha
 
-*Doesn't making $h$ much larger fix the bottleneck?* No — it is **information-theoretic**. A fixed-size vector has bounded capacity regardless of its dimensionality; the problem is forced compression, not vector width.
+_Doesn't making $h$ much larger fix the bottleneck?_ No — it is **information-theoretic**. A fixed-size vector has bounded capacity regardless of its dimensionality; the problem is forced compression, not vector width.
 
 ---
 
-## 5. Attention (Bahdanau, 2015)
+## 5. Attention
 
-**Key idea.** At every decoder step $t$, build a *fresh* context as a weighted sum of *all* encoder states. Weights come from a learned compatibility score between the current decoder state and each encoder position.
+**Key idea.** At every decoder step $t$, build a _fresh_ context as a weighted sum of _all_ encoder states. Weights come from a learned compatibility score between the current decoder state and each encoder position.
 
 ```
 e_{t,s} = vᵀ tanh(W_h · h^d_{t-1} + W_s · h^e_s)   [additive score]
@@ -190,17 +188,13 @@ Both encoder and decoder remain RNN-based ⇒ $O(n)$ strictly sequential steps. 
 
 ### ⚠ Gotcha
 
-*Cross-attention is $O(n \cdot m)$. What is the complexity of decoder self-attention at inference?* $O(n^2)$ as the sequence grows — which motivates **KV caching**: store past $K$ and $V$, only compute the new query.
+_Cross-attention is $O(n \cdot m)$. What is the complexity of decoder self-attention at inference?_ $O(n^2)$ as the sequence grows — which motivates **KV caching**: store past $K$ and $V$, only compute the new query.
 
 ---
 
-## 6. Transformer — Shapes at Every Stage
+## 6. Transformer
 
-**Key idea.** Drop recurrence entirely. Every token attends to every other token *in parallel*. Sequential depth $O(1)$, compute $O(n^2)$.
-
----
-
-### Attention — core formula
+**Key idea.** Drop recurrence entirely. Every token attends to every other token _in parallel_. Sequential depth $O(1)$, compute $O(n^2)$.
 
 $$\text{Attention}(Q, K, V) = \text{softmax}\!\left(\frac{Q K^\top}{\sqrt{d_k}}\right) V$$
 
@@ -226,7 +220,7 @@ attn_weights  [B, S, S]   softmax
 output        [B, S, H]   weights · V
 ```
 
-*B* = batch, *S* = seq_len, *H* = hidden_dim.
+B = batch, S = seq_len, H = hidden_dim
 
 ---
 
@@ -247,7 +241,7 @@ weights · V                  [B, nH, S, hD]
 out_proj                     [B, S, H]
 ```
 
-*nH* = num_heads, *hD* = head_dim = $H / nH$.
+nH = num_heads, hD = head_dim = H / nH
 
 ---
 
@@ -256,11 +250,11 @@ out_proj                     [B, S, H]
 $$\text{head}_i = \text{Attn}(X W^Q_i,\ X W^K_i,\ X W^V_i), \quad i = 1 \ldots h$$
 $$\text{MHA} = \text{Concat}(\text{head}_1, \ldots, \text{head}_h) \cdot W_O$$
 
-$h$ heads at $d/h$ dims ≈ 1 head at $d$ dims (same FLOPs). Each head *can* attend to different relationship types (syntax, coreference, position), but specialization is **emergent** — nothing enforces it.
+$h$ heads at $d/h$ dims ≈ 1 head at $d$ dims (same FLOPs). Each head _can_ attend to different relationship types (syntax, coreference, position), but specialization is **emergent** — nothing enforces it.
 
 ---
 
-### Key operations — gotchas
+### Implementation
 
 - **`.view(-1, ...)`** — `-1` infers a dim; passing seq_len directly also works.
 - **`.transpose(a, b)`** — symmetric: `(1, 2) ≡ (2, 1)`; `(-2, -1) ≡ (-1, -2)`.
@@ -272,29 +266,15 @@ $h$ heads at $d/h$ dims ≈ 1 head at $d$ dims (same FLOPs). Each head *can* att
 
 ### Masks — shapes & purposes
 
-| Mask               | Raw shape     | Expanded shape             | Blocks                | Where used         |
-|--------------------|---------------|----------------------------|-----------------------|--------------------|
-| padding (src)      | `[B, S]`      | `[B, 1, S, S]`             | PAD tokens in source  | encoder self-attn  |
-| causal             | `[S, S]` tril | `[B, nH, S, S]`            | future positions      | decoder self-attn  |
-| decoder (combined) | —             | `[B, nH, S_tgt, S_tgt]`    | future + PAD          | decoder self-attn  |
-| cross-attn         | `[B, S_src]`  | `[B, 1, S_tgt, S_src]`     | PAD in source         | decoder cross-attn |
+| Mask               | Raw shape     | Expanded shape          | Blocks               | Where used         |
+| ------------------ | ------------- | ----------------------- | -------------------- | ------------------ |
+| padding (src)      | `[B, S]`      | `[B, 1, S, S]`          | PAD tokens in source | encoder self-attn  |
+| causal             | `[S, S]` tril | `[B, nH, S, S]`         | future positions     | decoder self-attn  |
+| decoder (combined) | —             | `[B, nH, S_tgt, S_tgt]` | future + PAD         | decoder self-attn  |
+| cross-attn         | `[B, S_src]`  | `[B, 1, S_tgt, S_src]`  | PAD in source        | decoder cross-attn |
 
 - **Cross-attn mask is rectangular** $[S_{\text{tgt}} \times S_{\text{src}}]$ because $Q$ comes from the decoder (tgt) and $K$, $V$ from the encoder (src). Self-attn masks are always square.
-- **Decoder mask = causal AND pad.** Only attend if the position is *both* a real token *and* not in the future.
-
----
-
-### Causal mask — visualized (S = 4)
-
-```
-       k0  k1  k2  k3
-q0  [  T   F   F   F  ]
-q1  [  T   T   F   F  ]
-q2  [  T   T   T   F  ]
-q3  [  T   T   T   T  ]
-```
-
-Built with `torch.tril(torch.ones(S, S, dtype=torch.bool))`.
+- **Decoder mask = causal AND pad.** Only attend if the position is _both_ a real token _and_ not in the future.
 
 ---
 
@@ -304,7 +284,7 @@ Built with `torch.tril(torch.ones(S, S, dtype=torch.bool))`.
 - **self (decoder)** — $Q$, $K$, $V$ from $x$, but causal mask hides future.
 - **cross (decoder)** — $Q$ from decoder $x$; $K$, $V$ from `enc_output` — decoder queries attend to encoder states.
 
-**Trick Q:** *Why does the same model work in training (full target at once) and inference (one token at a time)?* The causal mask simulates sequential generation during parallel training — the two are **identical computationally**.
+**Trick Q:** _Why does the same model work in training (full target at once) and inference (one token at a time)?_ The causal mask simulates sequential generation during parallel training — the two are **identical computationally**.
 
 ---
 
@@ -330,15 +310,15 @@ logits = out_proj(x)    [B, S_tgt, vocab_size]
 # inference: argmax(logits[:, -1, :]) or sample → next token id
 ```
 
-Only the *last* decoder layer's attention weights survive — each layer overwrites them. Useful for visualization, not needed for the forward pass.
+Only the _last_ decoder layer's attention weights survive — each layer overwrites them. Useful for visualization, not needed for the forward pass.
 
 ---
 
 ### Residuals & LayerNorm
 
-- **Residual connections.** Without them, each layer must reconstruct the original signal from scratch *in addition* to learning — very hard in deep networks, and gradients vanish. Residuals let each layer learn only the *delta*.
-- **LayerNorm.** Normalizes activations across the hidden dim *per token*, independently of other tokens. Stabilizes training in deep stacks. Applied after the residual add.
-- **FFN role.** Attention *mixes* information across positions; FFN ($d \to 4d \to d$ with GeLU) transforms each position *independently* — the per-token nonlinear "memory / computation." It is the thing attention cannot do.
+- **Residual connections.** Without them, each layer must reconstruct the original signal from scratch _in addition_ to learning — very hard in deep networks, and gradients vanish. Residuals let each layer learn only the _delta_.
+- **LayerNorm.** Normalizes activations across the hidden dim _per token_, independently of other tokens. Stabilizes training in deep stacks. Applied after the residual add.
+- **FFN role.** Attention _mixes_ information across positions; FFN ($d \to 4d \to d$ with GeLU) transforms each position _independently_ — the per-token nonlinear "memory / computation." It is the thing attention cannot do.
 
 ---
 
@@ -354,14 +334,14 @@ $$\text{PE}(p, 2i) = \sin\!\left(\frac{p}{10000^{2i/d}}\right), \quad \text{PE}(
 
 ### ⚠ Gotchas
 
-- *Self-attention has no recurrence and no convolution — how does it know token order?* It doesn't. Positional encodings must be injected; the architecture is permutation-equivariant by default.
-- *Shuffle tokens AND their positional encodings together ⇒* output is **identical**. The model only knows *relative* structure, not absolute index.
+- _Self-attention has no recurrence and no convolution — how does it know token order?_ It doesn't. Positional encodings must be injected; the architecture is permutation-equivariant by default.
+- _Shuffle tokens AND their positional encodings together ⇒_ output is **identical**. The model only knows _relative_ structure, not absolute index.
 
 ---
 
 ## 7. Pretraining & Transfer Learning
 
-**Key idea.** Learn a strong **prior over language** from unlabeled text, then shift it toward a task by fine-tuning. Same weights; same contextual embeddings — and *contextual* embeddings are what finally fixes the **polysemy** problem of Word2Vec/GloVe (each token gets a representation conditioned on its sentence).
+**Key idea.** Learn a strong **prior over language** from unlabeled text, then shift it toward a task by fine-tuning. Same weights; same contextual embeddings — and _contextual_ embeddings are what finally fixes the **polysemy** problem of Word2Vec/GloVe (each token gets a representation conditioned on its sentence).
 
 ---
 
@@ -395,7 +375,7 @@ Decoder-only. Natively generative, left-to-right.
 
 ### ⚠ Gotcha
 
-*Why can't you pretrain BERT with a causal LM objective?* Its attention is bidirectional, so the model would *see* the token it is supposed to predict — trivially solved by copying, no useful representation learned. The masking forces genuine contextual inference precisely because the target is hidden.
+_Why can't you pretrain BERT with a causal LM objective?_ Its attention is bidirectional, so the model would _see_ the token it is supposed to predict — trivially solved by copying, no useful representation learned. The masking forces genuine contextual inference precisely because the target is hidden.
 
 ---
 
@@ -430,7 +410,7 @@ Temp τ:    P'(y) ∝ P(y)^{1/τ}
 
 ### ⚠ Gotcha
 
-*Why does beam search score higher in BLEU than sampling but produce worse text by human judgment?* Beam maximizes $\log P(Y)$, which favors short, generic, high-probability completions. Human preference rewards fluency and informativeness — properties not captured by likelihood alone.
+_Why does beam search score higher in BLEU than sampling but produce worse text by human judgment?_ Beam maximizes $\log P(Y)$, which favors short, generic, high-probability completions. Human preference rewards fluency and informativeness — properties not captured by likelihood alone.
 
 ---
 
@@ -481,7 +461,7 @@ Same optimum in theory, simpler in practice.
 
 ### ⚠ Gotcha
 
-*Why can't you skip SFT and run PPO directly on a pretrained model?* It doesn't follow instructions; the RM was trained on instruction-following preferences; and a near-random policy provides essentially no useful gradient signal — it just wastes compute. SFT puts the policy in the neighborhood where the RM is informative.
+_Why can't you skip SFT and run PPO directly on a pretrained model?_ It doesn't follow instructions; the RM was trained on instruction-following preferences; and a near-random policy provides essentially no useful gradient signal — it just wastes compute. SFT puts the policy in the neighborhood where the RM is informative.
 
 ---
 
@@ -498,14 +478,14 @@ Model completes query — no parameter change.
 
 **Mechanistic views:**
 
-- *Meta-learning* — attention over demos behaves like **implicit gradient descent** in activation space.
-- *Task vector* — demos shift the residual stream into a task-relevant subspace.
+- _Meta-learning_ — attention over demos behaves like **implicit gradient descent** in activation space.
+- _Task vector_ — demos shift the residual stream into a task-relevant subspace.
 
 ---
 
 ### Instruction tuning
 
-Fine-tune on $\{(\text{instruction}, \text{response})\}$ pairs ⇒ better zero-shot generalization across *unseen* task types. Unlike ICL, the capability is baked into the weights, not re-invoked each prompt.
+Fine-tune on $\{(\text{instruction}, \text{response})\}$ pairs ⇒ better zero-shot generalization across _unseen_ task types. Unlike ICL, the capability is baked into the weights, not re-invoked each prompt.
 
 **Instruction tuning ≠ ICL.** IT updates weights and generalizes to new task types; ICL uses context and stays within pretrained capabilities. Both expose the model to task format, but via different mechanisms.
 
@@ -525,8 +505,8 @@ Pretrained LM
 
 ### ⚠ Gotchas
 
-- *ICL accuracy is robust even when labels in the demonstrations are **wrong** — what does this reveal?* The model uses demos mainly to identify task **format** and input **distribution**, not to learn the input → output mapping. The pretraining prior dominates the label signal.
-- *Why does RLHF often make models less calibrated (sycophantic, overconfident)?* The RM rewards confident, agreeable answers; the KL penalty limits but cannot prevent distributional drift; and human raters often prefer a confident wrong answer over an uncertain correct one. Calibration is not in the loss.
+- _ICL accuracy is robust even when labels in the demonstrations are **wrong** — what does this reveal?_ The model uses demos mainly to identify task **format** and input **distribution**, not to learn the input → output mapping. The pretraining prior dominates the label signal.
+- _Why does RLHF often make models less calibrated (sycophantic, overconfident)?_ The RM rewards confident, agreeable answers; the KL penalty limits but cannot prevent distributional drift; and human raters often prefer a confident wrong answer over an uncertain correct one. Calibration is not in the loss.
 
 ---
 
@@ -556,42 +536,38 @@ RLHF / DPO      aligned, instruction-following LLM
 
 ---
 
-## 11. Derivatives — Reference
+## 11. Derivatives
 
 ### Core Calculus
 
-| Name          | $f$          | $df/dx$            |
-|---------------|--------------|--------------------|
-| Constant      | $c$          | $0$                |
-| Power rule    | $x^n$        | $n \cdot x^{n-1}$  |
-| Reciprocal    | $1/x$        | $-1/x^2$           |
-| Natural exp   | $e^x$        | $e^x$              |
-| General exp   | $a^x$        | $a^x \cdot \ln a$  |
-| Natural log   | $\ln x$      | $1/x$              |
-| Log base $a$  | $\log_a x$   | $1 / (x \ln a)$    |
+| Name         | $f$        | $df/dx$           |
+| ------------ | ---------- | ----------------- |
+| Power rule   | $x^n$      | $n \cdot x^{n-1}$ |
+| General exp  | $a^x$      | $a^x \cdot \ln a$ |
+| Log base $a$ | $\log_a x$ | $1 / (x \ln a)$   |
 
 ---
 
 ### Activations
 
-| Name            | $f$                         | $df/dx$                                |
-|-----------------|-----------------------------|----------------------------------------|
-| Sigmoid         | $\sigma(x) = 1/(1 + e^{-x})$ | $\sigma(x)(1 - \sigma(x))$             |
-| Tanh            | $\tanh(x)$                  | $1 - \tanh^2(x)$                       |
-| ReLU            | $\max(0, x)$                | $1$ if $x > 0$ else $0$                |
-| GELU            | $x \cdot \Phi(x)$           | $\Phi(x) + x \cdot \phi(x)$            |
-| SiLU / Swish    | $x \cdot \sigma(x)$         | $\sigma(x)(1 + x(1 - \sigma(x)))$      |
+| Name         | $f$                          | $df/dx$                           |
+| ------------ | ---------------------------- | --------------------------------- |
+| Sigmoid      | $\sigma(x) = 1/(1 + e^{-x})$ | $\sigma(x)(1 - \sigma(x))$        |
+| Tanh         | $\tanh(x)$                   | $1 - \tanh^2(x)$                  |
+| ReLU         | $\max(0, x)$                 | $1$ if $x > 0$ else $0$           |
+| GELU         | $x \cdot \Phi(x)$            | $\Phi(x) + x \cdot \phi(x)$       |
+| SiLU / Swish | $x \cdot \sigma(x)$          | $\sigma(x)(1 + x(1 - \sigma(x)))$ |
 
 ---
 
 ### Probability & Loss
 
-| Name                    | $f$                              | $df/dx$                 |
-|-------------------------|----------------------------------|-------------------------|
-| Softmax                 | $s_i = e^{x_i} / \sum_j e^{x_j}$ | $s_i (\delta_{ij} - s_j)$ |
-| Log-Softmax             | $\log s_i$                       | $\delta_{ij} - s_j$     |
-| **XEnt + Softmax ★**    | $-\log s_y$                      | $p_i - y_i$             |
-| KL Divergence           | $\sum_i p_i \log(p_i / q_i)$     | $-p_i / q_i$            |
+| Name                 | $f$                              | $df/dx$                   |
+| -------------------- | -------------------------------- | ------------------------- |
+| Softmax              | $s_i = e^{x_i} / \sum_j e^{x_j}$ | $s_i (\delta_{ij} - s_j)$ |
+| Log-Softmax          | $\log s_i$                       | $\delta_{ij} - s_j$       |
+| **XEnt + Softmax ★** | $-\log s_y$                      | $p_i - y_i$               |
+| KL Divergence        | $\sum_i p_i \log(p_i / q_i)$     | $-p_i / q_i$              |
 
 **Why the ★ matters.** The softmax Jacobian and the log cancel — the gradient collapses to **predicted − target**. That's why cross-entropy with softmax is the numerically stable default for classification.
 
@@ -599,13 +575,13 @@ RLHF / DPO      aligned, instruction-following LLM
 
 ### Layers & Normalization
 
-| Name                 | $f$                                       | $df/dx$                                                                                             |
-|----------------------|-------------------------------------------|-----------------------------------------------------------------------------------------------------|
-| Linear (weights)     | $Wx + b$                                  | $\delta \cdot x^\top$                                                                               |
-| Linear (input)       | $Wx + b$                                  | $W^\top \cdot \delta$                                                                               |
-| Linear (bias)        | $Wx + b$                                  | $\delta$                                                                                            |
-| Layer Norm           | $\gamma \cdot (x - \mu)/\sigma + \beta$   | $(\gamma/\sigma)\left[\partial_{\hat y} L - \text{mean}(\partial_{\hat y} L) - \hat y \cdot \text{mean}(\partial_{\hat y} L \cdot \hat y)\right]$ |
-| Attention (V)        | $\text{softmax}(QK^\top / \sqrt d) \cdot V$ | $S^\top \cdot \partial_O L$                                                                         |
-| Attention ($QK^\top$)| $\text{softmax}(QK^\top / \sqrt d) \cdot V$ | $J_{\text{softmax}}(\partial_S L) / \sqrt d$                                                        |
+| Name                  | $f$                                         | $df/dx$                                                                                                                                           |
+| --------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Linear (weights)      | $Wx + b$                                    | $\delta \cdot x^\top$                                                                                                                             |
+| Linear (input)        | $Wx + b$                                    | $W^\top \cdot \delta$                                                                                                                             |
+| Linear (bias)         | $Wx + b$                                    | $\delta$                                                                                                                                          |
+| Layer Norm            | $\gamma \cdot (x - \mu)/\sigma + \beta$     | $(\gamma/\sigma)\left[\partial_{\hat y} L - \text{mean}(\partial_{\hat y} L) - \hat y \cdot \text{mean}(\partial_{\hat y} L \cdot \hat y)\right]$ |
+| Attention (V)         | $\text{softmax}(QK^\top / \sqrt d) \cdot V$ | $S^\top \cdot \partial_O L$                                                                                                                       |
+| Attention ($QK^\top$) | $\text{softmax}(QK^\top / \sqrt d) \cdot V$ | $J_{\text{softmax}}(\partial_S L) / \sqrt d$                                                                                                      |
 
 ---
