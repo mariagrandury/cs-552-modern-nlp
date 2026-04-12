@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NLP Cheat Sheet</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<style>
+@page { size: A4 landscape; margin: 0; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { background: #ffffff; color: #000000; }
+body {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 7.9px;
+  line-height: 1.3;
+  padding: 10px;
+}
+.page {
+  width: 1123px;
+  height: 794px;
+  background: #ffffff;
+  margin: 0 auto 14px;
+  padding: 8px 10px;
+  border: 1px solid #000;
+  page-break-after: always;
+  overflow: hidden;
+}
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-auto-rows: min-content;
+  gap: 5px;
+  height: 100%;
+}
+.box {
+  border: 1px solid #000;
+  padding: 3px 5px;
+  break-inside: avoid;
+}
+.box h2 {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 8.3px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid #000;
+  padding-bottom: 1px;
+}
+.box h3 {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 7.7px;
+  font-weight: bold;
+  margin: 2px 0 1px;
+}
+.box p { margin-bottom: 2px; }
+.box ul { padding-left: 11px; margin-bottom: 2px; }
+.box li { margin-bottom: 1px; }
+pre, .mono {
+  font-family: 'Courier New', monospace;
+  font-size: 7.1px;
+  line-height: 1.4;
+  white-space: pre;
+  margin: 2px 0;
+  padding: 1px 0;
+  color: #000;
+}
+table { width: 100%; border-collapse: collapse; font-size: 7.2px; margin: 2px 0; }
+td, th { border: 1px solid #000; padding: 1px 3px; text-align: left; vertical-align: top; }
+th { font-weight: bold; }
+.katex { font-size: .92em !important; }
+.span2 { grid-column: span 2; }
+.span3 { grid-column: span 3; }
+.q { font-style: italic; margin-top: 2px; font-size: 7.5px; }
+.q::before { content: 'Q: '; font-weight: bold; font-style: normal; }
+@media print {
+  body { padding: 0; background: #fff; }
+  .page { margin: 0; border: none; box-shadow: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============================= PAGE 1 ============================= -->
+<div class="page">
+<div class="grid">
+
+<!-- 1. WORD EMBEDDINGS -->
+<div class="box">
+<h2>1. Word Embeddings</h2>
+<p><b>Key idea.</b> Replace atomic one-hot $\mathbf{e}_w\in\{0,1\}^{|V|}$ (always orthogonal) with dense $\mathbf{e}_w\in\mathbb{R}^d$, $d\ll|V|$, so <i>geometry encodes meaning</i>. Foundation: <i>distributional hypothesis</i> — words in similar contexts have similar meanings.</p>
+<p><b>Word2Vec.</b> <i>CBOW</i>: predict center from averaged context. <i>Skip-gram</i>: predict each context word from center (more updates for rare words). <i>Negative sampling</i>: $|V|$-softmax → $k$ binary classifications, $O(k)$ vs $O(|V|)$.</p>
+<p><b>GloVe.</b> Factorizes log co-occurrence $X_{ij}$:
+$J=\sum f(X_{ij})(w_i^\top\tilde w_j+b_i+\tilde b_j-\log X_{ij})^2$. Weight $f$ damps very frequent pairs.</p>
+<p><b>Why it works.</b> Linear analogies $\mathbf{e}_{\text{king}}-\mathbf{e}_{\text{man}}+\mathbf{e}_{\text{woman}}\approx\mathbf{e}_{\text{queen}}$ — meaning in <i>differences</i>. W2V implicitly factorizes shifted PMI; GloVe explicitly factorizes log-counts.</p>
+<p><b>Left open.</b> <i>Static</i> — one vector per word-type ⇒ polysemy ("bank"). CBOW averaging destroys word order.</p>
+<div class="q">Can smoothing make one-hot similar for synonyms? No — smoothing redistributes mass; it cannot create similarity over atomic symbols.</div>
+</div>
+
+<!-- 2. N-GRAMS -->
+<div class="box">
+<h2>2. Fixed-Context LMs: n-grams</h2>
+<p><b>Key idea.</b> Markov truncation of history:
+$P(w_t\mid w_{1:t-1})\approx P(w_t\mid w_{t-n+1:t-1})$, MLE counts
+$\hat P=C(\text{ctx},w)/C(\text{ctx})$.</p>
+<p><b>Eval.</b> Perplexity $PP(W)=P(W)^{-1/N}$ = exponentiated avg NLL.</p>
+<p><b>Smoothing.</b> Laplace (add-$\alpha$); <i>Kneser–Ney</i> uses <i>continuation probability</i> — how many distinct contexts a word appears in, not raw frequency.</p>
+<p><b>Issues.</b> (i) Sparsity of high-order n-grams; (ii) no cross-word generalization (cat/dog are atoms); (iii) hard context cap at $n{-}1$.</p>
+<p><b>Next step.</b> Neural LMs share <i>embedding parameters</i> ⇒ similar words get similar predictions even without co-occurring.</p>
+<div class="q">Why can't even perfect smoothing generalize across synonyms? No distributed representation: each word is atomic; smoothing moves mass, never creates similarity structure.</div>
+</div>
+
+<!-- 3. RNN / LSTM -->
+<div class="box">
+<h2>3. Neural LMs: RNN &amp; LSTM</h2>
+<p><b>RNN.</b> Same $W_h,W_x$ at every step:</p>
+<pre>h_t = tanh(W_h · h_{t-1} + W_x · x_t + b)
+P(w_{t+1}) = softmax(W_out · h_t)
+x_t:(B,d)   h_t:(B,h)</pre>
+<p>$h_t$ summarizes all past tokens ⇒ unlimited context (beats $n{-}1$). Param sharing = time-translation invariance.</p>
+<p><b>Issue — vanishing gradients.</b> $\partial\mathcal L/\partial h_0=\prod_t\partial h_t/\partial h_{t-1}\to 0$ when $\|W_h\|_2<1$; early context forgotten. Also: strictly sequential.</p>
+<p><b>LSTM fix.</b> Gated <i>additive</i> cell state:</p>
+<pre>f_t,i_t,o_t = σ(W_{·}[h_{t-1},x_t]+b_{·})
+c̃_t = tanh(W_c[h_{t-1},x_t]+b_c)
+c_t  = f_t ⊙ c_{t-1} + i_t ⊙ c̃_t    (additive!)
+h_t  = o_t ⊙ tanh(c_t)</pre>
+<p>Addition ⇒ gradient highway $\partial c_T/\partial c_t\approx\prod_\tau f_\tau\approx$ const if $f\approx1$.</p>
+<div class="q">Forget gate permanently 1 ⇒ LSTM becomes? An unbounded accumulator that never forgets. The forget gate enables <i>selective, bounded</i> memory.</div>
+</div>
+
+<!-- 4. SEQ2SEQ -->
+<div class="box">
+<h2>4. Seq2Seq</h2>
+<p><b>Key idea.</b> Encoder–decoder for variable-length → variable-length (MT, summarization). Encoder RNN compresses source into a <i>single</i> context vector; decoder RNN generates autoregressively conditioned on it.</p>
+<pre>Encoder: h_1..h_n over x_1..x_n
+         c = h_n      (B,h)  FIXED SIZE
+Decoder: P(y_t | y_{&lt;t}, c)  autoregressive</pre>
+<p><b>Training.</b> Teacher forcing: feed <i>gold</i> $y_{t-1}$, not model output, so each step is an independent classification.</p>
+<p><b>Issue — bottleneck.</b> Entire source compressed into one fixed vector $c$. Long sequences suffer catastrophic forgetting in the encoder.</p>
+<p><b>Next step.</b> Let the decoder pull from <i>all</i> encoder states, not just the last ⇒ attention.</p>
+<div class="q">Doesn't making $h$ huge fix the bottleneck? No — it's <i>information-theoretic</i>. A fixed-size vector has bounded capacity regardless of dimension.</div>
+</div>
+
+<!-- 5. ATTENTION -->
+<div class="box">
+<h2>5. Attention (Bahdanau, 2015)</h2>
+<p><b>Key idea.</b> At every decoder step, build a <i>fresh</i> context as a weighted sum of <i>all</i> encoder states. Weights come from a learned compatibility score between current decoder state and each encoder position.</p>
+<pre>e_{t,s} = vᵀ tanh(W_h·h^d_{t-1} + W_s·h^e_s)  additive
+α_{t,s} = softmax_s(e_{t,s})                  Σ_s α=1
+c_t     = Σ_s α_{t,s} · h^e_s                 dynamic ctx
+e_t:(B,n)  α_t:(B,n)  c_t:(B,h)</pre>
+<p><b>What it gives.</b> (i) No fixed bottleneck — capacity scales with source length. (ii) Interpretable <i>soft alignment</i> $\alpha$. (iii) Direct gradient path decoder→every encoder position.</p>
+<p><b>Still limited.</b> Encoder/decoder still recurrent ⇒ $O(n)$ sequential steps. Next leap: drop recurrence entirely, keep only attention → Transformer.</p>
+<div class="q">Cross-attn cost $O(n\cdot m)$; decoder self-attn cost at inference? $O(n^2)$ as $n$ grows — motivates KV-caching.</div>
+</div>
+
+<!-- 7. PRETRAINING -->
+<div class="box">
+<h2>7. Pretraining &amp; Transfer Learning</h2>
+<p><b>Key idea.</b> Learn a strong <i>prior over language</i> from unlabeled text, then shift toward a task by fine-tuning. Same weights; <i>contextual</i> embeddings finally fix the <i>polysemy</i> problem of Word2Vec/GloVe.</p>
+<p><b>BERT — Masked LM.</b> Mask ~15% of tokens, predict originals with <i>bidirectional</i> context.
+$\mathcal L_{\text{MLM}}=-\sum\log P(w_{\text{mask}}\mid\text{full ctx})$. Encoder-only; classification/QA, not generation.</p>
+<p><b>GPT — Causal LM.</b> Predict $w_t$ from $w_{<t}$ only.
+$\mathcal L_{\text{CLM}}=-\sum_t\log P(w_t\mid w_{<t})$. Decoder-only; natively generative.</p>
+<p><b>Representation hierarchy</b> (probing):</p>
+<ul>
+<li>early: morphology, POS, surface form</li>
+<li>middle: syntax, named entities</li>
+<li>late: semantics, task-specific features</li>
+</ul>
+<div class="q">Why can't you pretrain BERT with a causal objective? Bidirectional attention sees the target token ⇒ trivial copying, no useful representation. MLM hides the target, forcing genuine contextual inference.</div>
+</div>
+
+<!-- 8. TEXT GENERATION -->
+<div class="box">
+<h2>8. Text Generation: Training &amp; Decoding</h2>
+<p><b>Training — Teacher Forcing.</b></p>
+<pre>for t in 1..T:
+  input  = gold y_{t-1}      (NOT model's pred)
+  target = y_t
+  loss   = −log P(y_t | gold prefix)</pre>
+<p><b>Exposure bias.</b> Train-time always sees a gold prefix; inference conditions on its own (possibly wrong) outputs ⇒ train/test mismatch, errors compound.</p>
+<p><b>Decoding.</b></p>
+<pre>Greedy:    ŷ_t = argmax P(y_t|y_{&lt;t})     fast, myopic
+Beam(k):   top-k hypotheses per step     ↑BLEU, repetitive
+Sampling:  y_t ~ P(·|y_{&lt;t})             diverse, incoherent
+Top-k:     sample from top-k tokens
+Top-p:     smallest set Σp≥p             (nucleus)
+Temp τ:    P'(y) ∝ P(y)^{1/τ}
+           τ→0 = greedy, τ→∞ = uniform</pre>
+<div class="q">Beam search maximizes BLEU but often produces <i>worse</i> text by humans — why? Beam maximizes $\log P(Y)$, favoring short/generic/high-prob completions. Human preference rewards fluency/informativeness not captured by likelihood.</div>
+</div>
+
+<!-- CONCEPT CHAIN PAGE 1 -->
+<div class="box">
+<h2>Concept Chain — Page 1</h2>
+<pre>one-hot       atomic, orthogonal, no similarity
+  ↓ distributed reps
+W2V/GloVe     dense, geometry = semantics
+  ↓ still static → polysemy
+(→ contextual emb. via pretraining, sec 7)
+
+n-gram        fixed ctx, sparse
+  ↓ shared embeddings + recurrence
+RNN           unlimited ctx in theory
+  ↓ vanishing grads
+LSTM          gated additive cell = grad highway
+  ↓ still sequential + fixed-c bottleneck
+Seq2Seq       enc → c → dec
+  ↓ info-theoretic bottleneck
+Attention     dynamic c_t over all h^e_s
+  ↓ drop recurrence entirely
+Transformer   (page 2)</pre>
+<p><b>Meta-pattern.</b> Each step removes one hard constraint: atomicity ⇒ distribution; fixed window ⇒ recurrence; gradient decay ⇒ gating; fixed context ⇒ dynamic attention.</p>
+</div>
+
+</div><!-- /grid -->
+</div><!-- /page 1 -->
+
+<!-- ============================= PAGE 2 ============================= -->
+<div class="page">
+<div class="grid">
+
+<!-- 6a. TRANSFORMER — ATTENTION CORE -->
+<div class="box span3">
+<h2>6. Transformer — Shapes at Every Stage</h2>
+<p><b>Key idea.</b> Drop recurrence entirely. Every token attends to every other token <i>in parallel</i>. Sequential depth $O(1)$, compute $O(n^2)$.</p>
+<p><b>Attention — core formula.</b>
+$\text{Attention}(Q,K,V)=\text{softmax}(QK^\top/\sqrt{d_k})\,V$.
+$Q$ = "what I'm looking for", $K$ = "what I advertise", $V$ = "what I actually give".</p>
+<p><b>Why 3 projections</b> if $Q,K,V$ all start from the same $x$? Without them the model can't learn the three distinct roles — and a token's dot product with itself always dominates, so every token would mostly attend to itself.</p>
+<p><b>Why $\div\sqrt{d_k}$?</b> In high dimensions dot products grow large ⇒ softmax saturates to near one-hot ⇒ gradients vanish. Scaling keeps magnitudes stable.</p>
+</div>
+
+<!-- 6b. SHAPE FLOW SINGLE HEAD -->
+<div class="box">
+<h3>Shape flow — single head</h3>
+<pre>input x       [B, S, H]
+query_proj    [B, S, H]
+key_proj      [B, S, H]
+value_proj    [B, S, H]
+attn_scores   [B, S, S]   Q·Kᵀ
+attn_weights  [B, S, S]   softmax
+output        [B, S, H]   weights·V</pre>
+<p><i>B</i>=batch, <i>S</i>=seq_len, <i>H</i>=hidden_dim.</p>
+</div>
+
+<!-- 6c. SHAPE FLOW MULTI-HEAD -->
+<div class="box">
+<h3>Shape flow — multi-head</h3>
+<pre>[B, S, H]
+  → .view(B,-1,nH,hD)   [B, S, nH, hD]
+  → .transpose(1,2)     [B, nH, S, hD]
+
+Q·Kᵀ                    [B, nH, S, S]
+softmax(dim=-1)         [B, nH, S, S]
+weights·V               [B, nH, S, hD]
+
+  → .transpose(1,2)     [B, S, nH, hD]
+  → .contiguous()
+  → .view(B,-1,H)        [B, S, H]
+out_proj                 [B, S, H]</pre>
+<p><i>nH</i>=num_heads, <i>hD</i>=head_dim=$H/nH$.</p>
+</div>
+
+<!-- 6d. KEY OPS GOTCHAS -->
+<div class="box">
+<h3>Key operations — gotchas</h3>
+<p><b>.view(-1,...)</b> − $-1$ infers a dim; passing seq_len directly also works.</p>
+<p><b>.transpose(a,b)</b> − symmetric: $(1,2)\equiv(2,1)$; $(-2,-1)\equiv(-1,-2)$.</p>
+<p><b>.contiguous()</b> − transpose only changes strides, not memory. <b>.view()</b> requires contiguous memory — omitting this crashes.</p>
+<p><b>softmax dim=-1</b> − normalises over $K$ positions for each $Q$. dim=-2 would normalise over $Q$ — meaningless.</p>
+<p><b>head_dim</b> $=$ hidden_dim $//$ num_heads — must divide evenly (assert in <i>__init__</i>).</p>
+<p><b>Why multi-head?</b> One head captures one relationship at a time; multiple heads let the model attend to syntax, semantics, coreference etc. simultaneously. Specialisation is <i>emergent</i> — nothing enforces it.</p>
+</div>
+
+<!-- 6e. MASKS TABLE -->
+<div class="box span2">
+<h3>Masks — shapes &amp; purposes</h3>
+<table>
+<tr><th>Mask</th><th>Raw</th><th>Expanded</th><th>Blocks</th><th>Where</th></tr>
+<tr><td>padding (src)</td><td>[B,S]</td><td>[B,1,S,S]</td><td>PAD tokens in source</td><td>encoder self-attn</td></tr>
+<tr><td>causal</td><td>[S,S] tril</td><td>[B,nH,S,S]</td><td>future positions</td><td>decoder self-attn</td></tr>
+<tr><td>decoder (combined)</td><td>—</td><td>[B,nH,S_tgt,S_tgt]</td><td>future + PAD</td><td>decoder self-attn</td></tr>
+<tr><td>cross-attn</td><td>[B,S_src]</td><td>[B,1,S_tgt,S_src]</td><td>PAD in source</td><td>decoder cross-attn</td></tr>
+</table>
+<p><b>Cross-attn mask is rectangular</b> $[S_{\text{tgt}}\times S_{\text{src}}]$ because $Q$ comes from decoder (tgt) and $K,V$ from encoder (src). Self-attn masks are always square.</p>
+<p><b>Decoder mask = causal AND pad.</b> Only attend if the position is <i>both</i> a real token <i>and</i> not in the future.</p>
+<pre>Causal (S=4):    k0 k1 k2 k3
+          q0  [  T  F  F  F ]
+          q1  [  T  T  F  F ]
+          q2  [  T  T  T  F ]
+          q3  [  T  T  T  T ]        torch.tril(torch.ones(S,S,bool))</pre>
+</div>
+
+<!-- 6f. SELF vs CROSS -->
+<div class="box">
+<h3>Self-attn vs cross-attn</h3>
+<p><b>self (encoder)</b> − $Q,K,V$ all from $x$; every token sees all others.</p>
+<p><b>self (decoder)</b> − $Q,K,V$ from $x$, but causal mask hides future.</p>
+<p><b>cross (decoder)</b> − $Q$ from decoder $x$; $K,V$ from <i>enc_output</i> — decoder queries attend to encoder.</p>
+<div class="q">Why does the same model work in train (full tgt at once) and inference (one token at a time)? The causal mask simulates sequential generation during parallel training — they are identical computationally.</div>
+</div>
+
+<!-- 6g. ENCODER LAYER FORWARD -->
+<div class="box span2">
+<h3>Encoder layer forward</h3>
+<pre>x = embedding(src) * √H            [B,S,H]   scaling balances embeddings vs pos_enc
+x = x + pos_encoding(0..S-1)       [B,S,H]   broadcast over batch; without this, attention is order-agnostic
+for layer in layers:
+    attn_out,_ = self_attn(x,x,x)  [B,S,H]   x,x,x = self-attention; _ discards weights
+    x = norm1(x + attn_out)        [B,S,H]   residual + layernorm
+    ff = linear2(relu(linear1(x))) [B,S,H]   FFN: H → intermediate_size → H
+    x = norm2(x + ff)              [B,S,H]   residual + layernorm</pre>
+<h3>Decoder — final projection</h3>
+<pre>logits = out_proj(x)    [B, S_tgt, vocab_size]
+# training:  cross_entropy(logits, target_ids)
+# inference: argmax(logits[:,-1,:]) or sample → next token id</pre>
+<p><b>attn_weights are overwritten each layer</b> — only the last decoder layer's weights are returned. Useful for visualisation, not needed for the forward pass.</p>
+</div>
+
+<!-- 6h. RESIDUALS / LAYERNORM / POS ENC -->
+<div class="box">
+<h3>Residuals, LayerNorm &amp; Position</h3>
+<p><b>Residuals.</b> Without them, each layer must <i>reconstruct</i> the original signal from scratch <i>plus</i> learn — very hard in deep nets, and gradients vanish. Residuals let each layer learn only the <i>delta</i>.</p>
+<p><b>LayerNorm.</b> Normalises activations across the hidden dim <i>per token, independently</i>. Stabilises training in deep stacks. Applied after the residual add.</p>
+<p><b>FFN role.</b> Attention <i>mixes</i> information across positions; FFN ($d\to4d\to d$ with GeLU) transforms each position <i>independently</i> — the per-token nonlinear computation.</p>
+<p><b>Positional encoding.</b> Attention is permutation-equivariant — without PE the model has no sense of order.
+$\text{PE}(p,2i)=\sin(p/10000^{2i/d})$, $\cos$ for odd $i$. <i>Add</i>, don't concat — keeps $d$ constant.</p>
+<div class="q">Shuffle tokens <i>and</i> their PEs together ⇒ output identical. The model only knows <i>relative</i> position, not absolute index.</div>
+<div class="q">Self-attention has no recurrence and no convolution — how does it know token order? It doesn't. PE must be injected; the architecture is permutation-equivariant by default.</div>
+</div>
+
+<!-- 9. REINFORCE / RLHF / DPO -->
+<div class="box">
+<h2>9. REINFORCE, RLHF &amp; DPO</h2>
+<p><b>Why RL?</b> CLM optimizes next-token likelihood; human preferences (helpful, harmless, honest) are not predictable from MLE alone and not differentiable through discrete samples ⇒ policy gradient.</p>
+<p><b>REINFORCE.</b> Treat LM as policy $\pi_\theta(y\mid x)$. For scalar reward $r(x,y)$:
+$\nabla_\theta\mathbb{E}_{y\sim\pi_\theta}[r]=\mathbb{E}[r(x,y)\nabla_\theta\log\pi_\theta(y\mid x)]$. High variance ⇒ baseline $b$.</p>
+<p><b>RLHF pipeline.</b></p>
+<ul>
+<li><b>SFT</b> — fine-tune on human demonstrations.</li>
+<li><b>Reward model</b> $r_\phi$ on pairs $y^w\succ y^l$ (Bradley–Terry):
+$\mathcal L_{\text{RM}}=-\mathbb E[\log\sigma(r_\phi(x,y^w)-r_\phi(x,y^l))]$.</li>
+<li><b>PPO</b>: $\max_\theta\,\mathbb E_{\pi_\theta}[r_\phi]-\beta\,\text{KL}[\pi_\theta\|\pi_{\text{ref}}]$.</li>
+</ul>
+<p><b>Why KL?</b> Without it, $\pi_\theta$ exploits $r_\phi$'s blind spots — "reward hacking" — drifting to OOD text that scores high but is bad.</p>
+<p><b>DPO.</b> Closed-form reparam removes explicit RM and RL loop:
+$\mathcal L_{\text{DPO}}=-\mathbb E[\log\sigma(\beta\log\tfrac{\pi_\theta(y^w)}{\pi_{\text{ref}}(y^w)}-\beta\log\tfrac{\pi_\theta(y^l)}{\pi_{\text{ref}}(y^l)})]$.</p>
+<div class="q">Why can't you skip SFT and run PPO on a raw pretrained model? It doesn't follow instructions; the RM is trained on instruction-following preferences; a near-random policy gives no useful gradient signal. SFT puts the policy where the RM is informative.</div>
+</div>
+
+<!-- 10. LLMs: ICL / IT / POST-TRAINING -->
+<div class="box">
+<h2>10. LLMs: ICL, Instruction Tuning, Post-training</h2>
+<p><b>In-Context Learning (ICL).</b> Task specified entirely via prompt. <i>Zero</i> gradient updates.</p>
+<pre>Prompt = [demo_1, demo_2, ..., demo_k, query]
+Model completes query — no parameter change.</pre>
+<p>Mechanistic views: attention over demos behaves like <i>implicit</i> gradient descent in activation space; demos form a <i>task vector</i> that shifts the residual stream into a task-relevant subspace.</p>
+<p><b>Instruction tuning.</b> Fine-tune on $\{(\text{instruction},\text{response})\}$ pairs. Updates weights; generalizes zero-shot to <i>unseen</i> task types. Unlike ICL, the capability is baked into the model, not re-invoked each prompt.</p>
+<p><b>Full post-training pipeline.</b></p>
+<pre>Pretrained LM
+  → SFT (instruction following)
+  → Reward Model (human preferences)
+  → RLHF / DPO (alignment)
+  → Red-teaming + safety eval</pre>
+<div class="q">ICL accuracy is robust to <i>wrong</i> labels in demonstrations — what does this reveal? The model uses demos mainly to identify task <i>format</i> and input <i>distribution</i>, not to learn input→output. The pretraining prior dominates the label signal.</div>
+<div class="q">Why does RLHF often make models <i>less</i> calibrated (sycophantic)? The RM rewards confident, agreeable answers; the KL penalty limits but can't prevent distributional drift; human raters often prefer a confident wrong answer over an uncertain correct one.</div>
+</div>
+
+<!-- FULL CHAIN -->
+<div class="box">
+<h2>Full Concept Chain</h2>
+<pre>n-gram         fixed ctx, sparse, no generalization
+  ↓ embeddings + recurrence
+RNN            unlimited ctx; vanishing grads
+  ↓ gated additive cell
+LSTM           stable grads; sequential
+  ↓ dynamic context per dec step
+Seq2Seq+Attn   no bottleneck; O(n) steps
+  ↓ drop recurrence
+Transformer    O(1) depth, parallel, scales
+  ↓ scale + unlabeled pretraining
+BERT / GPT     contextual emb ⇒ fix polysemy
+  ↓ demos in prompt (no weight update)
+ICL            task adaptation at inference
+  ↓ supervised instruction fine-tuning
+IT LM
+  ↓ human preference signal
+RLHF / DPO     aligned, instruction-following LLM</pre>
+<p><b>Meta-pattern.</b> Each arrow removes a bottleneck: capacity → gradient flow → context window → parallelism → supervision source → preference alignment.</p>
+</div>
+
+<!-- 11. DERIVATIVES -->
+<div class="box span3">
+<h2>11. Derivatives — Reference</h2>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">
+
+<div>
+<h3>Core Calculus</h3>
+<table>
+<tr><th>name</th><th>$f$</th><th>$df/dx$</th></tr>
+<tr><td>Constant</td><td>$c$</td><td>$0$</td></tr>
+<tr><td>Power</td><td>$x^n$</td><td>$n\,x^{n-1}$</td></tr>
+<tr><td>Reciprocal</td><td>$1/x$</td><td>$-1/x^2$</td></tr>
+<tr><td>Natural exp</td><td>$e^x$</td><td>$e^x$</td></tr>
+<tr><td>General exp</td><td>$a^x$</td><td>$a^x\ln a$</td></tr>
+<tr><td>Natural log</td><td>$\ln x$</td><td>$1/x$</td></tr>
+<tr><td>Log base $a$</td><td>$\log_a x$</td><td>$1/(x\ln a)$</td></tr>
+</table>
+</div>
+
+<div>
+<h3>Activations</h3>
+<table>
+<tr><th>name</th><th>$f$</th><th>$df/dx$</th></tr>
+<tr><td>Sigmoid</td><td>$\sigma(x)=\tfrac{1}{1+e^{-x}}$</td><td>$\sigma(x)(1-\sigma(x))$</td></tr>
+<tr><td>Tanh</td><td>$\tanh(x)$</td><td>$1-\tanh^2(x)$</td></tr>
+<tr><td>ReLU</td><td>$\max(0,x)$</td><td>$\mathbf{1}[x>0]$</td></tr>
+<tr><td>GELU</td><td>$x\,\Phi(x)$</td><td>$\Phi(x)+x\,\phi(x)$</td></tr>
+<tr><td>SiLU/Swish</td><td>$x\,\sigma(x)$</td><td>$\sigma(x)(1+x(1-\sigma(x)))$</td></tr>
+</table>
+</div>
+
+<div>
+<h3>Probability &amp; Loss</h3>
+<table>
+<tr><th>name</th><th>$f$</th><th>$df/dx$</th></tr>
+<tr><td>Softmax</td><td>$s_i = e^{x_i}/\sum_j e^{x_j}$</td><td>$s_i(\delta_{ij}-s_j)$</td></tr>
+<tr><td>Log-Softmax</td><td>$\log s_i$</td><td>$\delta_{ij}-s_j$</td></tr>
+<tr><td><b>XEnt + Softmax ★</b></td><td>$-\log s_y$</td><td>$p_i - y_i$</td></tr>
+<tr><td>KL Divergence</td><td>$\sum p_i\log(p_i/q_i)$</td><td>$-p_i/q_i$</td></tr>
+</table>
+<p style="margin-top:2px"><b>Why the ★ matters.</b> The softmax Jacobian and the log cancel — the gradient collapses to <i>predicted − target</i>. That's why cross-entropy with softmax is the numerically stable default.</p>
+</div>
+
+<div>
+<h3>Layers &amp; Normalization</h3>
+<table>
+<tr><th>name</th><th>$f$</th><th>$df/dx$</th></tr>
+<tr><td>Linear (weights)</td><td>$Wx+b$</td><td>$\delta\,x^\top$</td></tr>
+<tr><td>Linear (input)</td><td>$Wx+b$</td><td>$W^\top\,\delta$</td></tr>
+<tr><td>Linear (bias)</td><td>$Wx+b$</td><td>$\delta$</td></tr>
+<tr><td>Layer Norm</td><td>$\gamma\tfrac{x-\mu}{\sigma}+\beta$</td><td>$(\gamma/\sigma)[\partial_{\hat y}\!L-\text{mean}(\partial_{\hat y}\!L)-\hat y\,\text{mean}(\partial_{\hat y}\!L\cdot\hat y)]$</td></tr>
+<tr><td>Attention (V)</td><td>$\text{softmax}(QK^\top/\sqrt d)V$</td><td>$S^\top\,\partial_O L$</td></tr>
+<tr><td>Attention ($QK^\top$)</td><td>$\text{softmax}(QK^\top/\sqrt d)V$</td><td>$J_{\text{softmax}}(\partial_S L)/\sqrt d$</td></tr>
+</table>
+</div>
+
+</div>
+</div>
+
+</div><!-- /grid -->
+</div><!-- /page 2 -->
+
+<script>
+renderMathInElement(document.body, {
+  delimiters: [
+    { left: '$$', right: '$$', display: true },
+    { left: '$',  right: '$',  display: false }
+  ],
+  throwOnError: false
+});
+</script>
+</body>
+</html>
