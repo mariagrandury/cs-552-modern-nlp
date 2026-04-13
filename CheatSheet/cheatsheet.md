@@ -35,8 +35,6 @@ GloVe _explicitly_ factorizes the log co-occurrence matrix; Word2Vec _implicitly
 
 ---
 
-### ⚠ Gotcha
-
 _If two words never co-occur but appear in identical contexts, can one-hot capture their similarity?_ No — they remain orthogonal regardless of any evidence. _Can smoothing fix this?_ Also no — smoothing redistributes probability mass; it cannot create similarity structure over atomic symbols.
 
 ---
@@ -69,8 +67,6 @@ $$P(w_t \mid w_{1:t-1}) \approx P(w_t \mid w_{t-n+1:t-1})$$
 **Next step →** Neural LMs share _embedding parameters_ across contexts, enabling generalization across similar words.
 
 ---
-
-### ⚠ Gotcha
 
 _Why can't even perfect smoothing generalize across synonyms?_ Because there is no **distributed representation**: each word is an atomic symbol, and smoothing only redistributes mass — it never creates similarity structure between different symbols.
 
@@ -121,8 +117,6 @@ Solves the vanishing-gradient problem of the vanilla RNN. Still sequential ⇒ n
 
 ---
 
-### ⚠ Gotcha
-
 _If the forget gate always outputs 1, what does LSTM reduce to?_ An unbounded accumulator that never forgets — the cell state grows without limit. The forget gate is what enables **selective, bounded** memory.
 
 ---
@@ -149,8 +143,6 @@ The entire source sequence must fit into one fixed-size vector $c = h_n$. Capaci
 **Next step →** Attention: compute a separate, _dynamic_ context per decoder step, pulling from _all_ encoder hidden states rather than just the last.
 
 ---
-
-### ⚠ Gotcha
 
 _Doesn't making $h$ much larger fix the bottleneck?_ No — it is **information-theoretic**. A fixed-size vector has bounded capacity regardless of its dimensionality; the problem is forced compression, not vector width.
 
@@ -185,8 +177,6 @@ c_t:  (B, h)     # weighted sum of encoder states
 Both encoder and decoder remain RNN-based ⇒ $O(n)$ strictly sequential steps. Next leap: drop recurrence entirely, keep only attention → **Transformer**.
 
 ---
-
-### ⚠ Gotcha
 
 _Cross-attention is $O(n \cdot m)$. What is the complexity of decoder self-attention at inference?_ $O(n^2)$ as the sequence grows — which motivates **KV caching**: store past $K$ and $V$, only compute the new query.
 
@@ -245,16 +235,16 @@ nH = num_heads, hD = head_dim = H / nH
 
 ---
 
-### Multi-head attention — formula
+### Multi-head attention
 
 $$\text{head}_i = \text{Attn}(X W^Q_i,\ X W^K_i,\ X W^V_i), \quad i = 1 \ldots h$$
 $$\text{MHA} = \text{Concat}(\text{head}_1, \ldots, \text{head}_h) \cdot W_O$$
 
-$h$ heads at $d/h$ dims ≈ 1 head at $d$ dims (same FLOPs). Each head _can_ attend to different relationship types (syntax, coreference, position), but specialization is **emergent** — nothing enforces it.
+$h$ heads at $d/h$ dims ≈ 1 head at $d$ dims (same FLOPs). Each head _can_ attend to different relationship types (syntax, coreference, position), but specialization is **emergent** not enforced.
 
 ---
 
-### Implementation
+<!-- ### Implementation
 
 - **`.view(-1, ...)`** — `-1` infers a dim; passing seq_len directly also works.
 - **`.transpose(a, b)`** — symmetric: `(1, 2) ≡ (2, 1)`; `(-2, -1) ≡ (-1, -2)`.
@@ -262,16 +252,16 @@ $h$ heads at $d/h$ dims ≈ 1 head at $d$ dims (same FLOPs). Each head _can_ att
 - **`softmax(dim=-1)`** — normalizes over $K$ positions for each $Q$. `dim=-2` would normalize over $Q$ — meaningless.
 - **`head_dim = hidden_dim // num_heads`** — must divide evenly (assert in `__init__`).
 
----
+--- -->
 
 ### Masks — shapes & purposes
 
-| Mask               | Raw shape     | Expanded shape          | Blocks               | Where used         |
-| ------------------ | ------------- | ----------------------- | -------------------- | ------------------ |
-| padding (src)      | `[B, S]`      | `[B, 1, S, S]`          | PAD tokens in source | encoder self-attn  |
-| causal             | `[S, S]` tril | `[B, nH, S, S]`         | future positions     | decoder self-attn  |
-| decoder (combined) | —             | `[B, nH, S_tgt, S_tgt]` | future + PAD         | decoder self-attn  |
-| cross-attn         | `[B, S_src]`  | `[B, 1, S_tgt, S_src]`  | PAD in source        | decoder cross-attn |
+| Mask               | Raw shape     | Expanded shape          | Blocks           | Where used     |
+| ------------------ | ------------- | ----------------------- | ---------------- | -------------- |
+| padding (src)      | `[B, S]`      | `[B, 1, S, S]`          | PAD in source    | enc self-attn  |
+| causal             | `[S, S]` tril | `[B, nH, S, S]`         | future positions | dec self-attn  |
+| decoder (combined) | —             | `[B, nH, S_tgt, S_tgt]` | future + PAD     | dec self-attn  |
+| cross-attn         | `[B, S_src]`  | `[B, 1, S_tgt, S_src]`  | PAD in source    | dec cross-attn |
 
 - **Cross-attn mask is rectangular** $[S_{\text{tgt}} \times S_{\text{src}}]$ because $Q$ comes from the decoder (tgt) and $K$, $V$ from the encoder (src). Self-attn masks are always square.
 - **Decoder mask = causal AND pad.** Only attend if the position is _both_ a real token _and_ not in the future.
@@ -284,7 +274,7 @@ $h$ heads at $d/h$ dims ≈ 1 head at $d$ dims (same FLOPs). Each head _can_ att
 - **self (decoder)** — $Q$, $K$, $V$ from $x$, but causal mask hides future.
 - **cross (decoder)** — $Q$ from decoder $x$; $K$, $V$ from `enc_output` — decoder queries attend to encoder states.
 
-**Trick Q:** _Why does the same model work in training (full target at once) and inference (one token at a time)?_ The causal mask simulates sequential generation during parallel training — the two are **identical computationally**.
+_Why does the same model work in training (full target at once) and inference (one token at a time)?_ The causal mask simulates sequential generation during parallel training — the two are **identical computationally**.
 
 ---
 
@@ -330,12 +320,8 @@ $$\text{PE}(p, 2i) = \sin\!\left(\frac{p}{10000^{2i/d}}\right), \quad \text{PE}(
 
 **Add**, don't concatenate — keeps $d$ constant.
 
----
-
-### ⚠ Gotchas
-
-- _Self-attention has no recurrence and no convolution — how does it know token order?_ It doesn't. Positional encodings must be injected; the architecture is permutation-equivariant by default.
-- _Shuffle tokens AND their positional encodings together ⇒_ output is **identical**. The model only knows _relative_ structure, not absolute index.
+<!-- - _Self-attention has no recurrence and no convolution — how does it know token order?_ It doesn't. Positional encodings must be injected; the architecture is permutation-equivariant by default.
+- _Shuffle tokens AND their positional encodings together ⇒_ output is **identical**. The model only knows _relative_ structure, not absolute index. -->
 
 ---
 
@@ -364,16 +350,6 @@ $$\mathcal{L}_{\text{CLM}} = -\sum_t \log P(w_t \mid w_1, \ldots, w_{t-1})$$
 Decoder-only. Natively generative, left-to-right.
 
 ---
-
-### Representation hierarchy (probing studies)
-
-- **Early layers** — morphology, POS, surface form.
-- **Middle layers** — syntax, named entities.
-- **Late layers** — semantics, task-specific features.
-
----
-
-### ⚠ Gotcha
 
 _Why can't you pretrain BERT with a causal LM objective?_ Its attention is bidirectional, so the model would _see_ the token it is supposed to predict — trivially solved by copying, no useful representation learned. The masking forces genuine contextual inference precisely because the target is hidden.
 
@@ -407,8 +383,6 @@ Temp τ:    P'(y) ∝ P(y)^{1/τ}
 ```
 
 ---
-
-### ⚠ Gotcha
 
 _Why does beam search score higher in BLEU than sampling but produce worse text by human judgment?_ Beam maximizes $\log P(Y)$, which favors short, generic, high-probability completions. Human preference rewards fluency and informativeness — properties not captured by likelihood alone.
 
@@ -459,8 +433,6 @@ Same optimum in theory, simpler in practice.
 
 ---
 
-### ⚠ Gotcha
-
 _Why can't you skip SFT and run PPO directly on a pretrained model?_ It doesn't follow instructions; the RM was trained on instruction-following preferences; and a near-random policy provides essentially no useful gradient signal — it just wastes compute. SFT puts the policy in the neighborhood where the RM is informative.
 
 ---
@@ -490,20 +462,6 @@ Fine-tune on $\{(\text{instruction}, \text{response})\}$ pairs ⇒ better zero-s
 **Instruction tuning ≠ ICL.** IT updates weights and generalizes to new task types; ICL uses context and stays within pretrained capabilities. Both expose the model to task format, but via different mechanisms.
 
 ---
-
-### Full post-training pipeline
-
-```
-Pretrained LM
-  → SFT (instruction following)
-  → Reward Model (human preferences)
-  → RLHF / DPO (alignment)
-  → Red-teaming + safety evaluation
-```
-
----
-
-### ⚠ Gotchas
 
 - _ICL accuracy is robust even when labels in the demonstrations are **wrong** — what does this reveal?_ The model uses demos mainly to identify task **format** and input **distribution**, not to learn the input → output mapping. The pretraining prior dominates the label signal.
 - _Why does RLHF often make models less calibrated (sycophantic, overconfident)?_ The RM rewards confident, agreeable answers; the KL penalty limits but cannot prevent distributional drift; and human raters often prefer a confident wrong answer over an uncertain correct one. Calibration is not in the loss.
@@ -538,36 +496,24 @@ RLHF / DPO      aligned, instruction-following LLM
 
 ## 11. Derivatives
 
-### Core Calculus
+| Name         | $f$                          | $df/dx$                    |
+| ------------ | ---------------------------- | -------------------------- |
+| Power rule   | $x^n$                        | $n \cdot x^{n-1}$          |
+| General exp  | $a^x$                        | $a^x \cdot \ln a$          |
+| Log base $a$ | $\log_a x$                   | $1 / (x \ln a)$            |
+| Sigmoid      | $\sigma(x) = 1/(1 + e^{-x})$ | $\sigma(x)(1 - \sigma(x))$ |
+| Tanh         | $\tanh(x)$                   | $1 - \tanh^2(x)$           |
+| ReLU         | $\max(0, x)$                 | $1$ if $x > 0$ else $0$    |
 
-| Name         | $f$        | $df/dx$           |
-| ------------ | ---------- | ----------------- |
-| Power rule   | $x^n$      | $n \cdot x^{n-1}$ |
-| General exp  | $a^x$      | $a^x \cdot \ln a$ |
-| Log base $a$ | $\log_a x$ | $1 / (x \ln a)$   |
-
----
-
-### Activations
-
-| Name         | $f$                          | $df/dx$                           |
-| ------------ | ---------------------------- | --------------------------------- |
-| Sigmoid      | $\sigma(x) = 1/(1 + e^{-x})$ | $\sigma(x)(1 - \sigma(x))$        |
-| Tanh         | $\tanh(x)$                   | $1 - \tanh^2(x)$                  |
-| ReLU         | $\max(0, x)$                 | $1$ if $x > 0$ else $0$           |
+<!--
 | GELU         | $x \cdot \Phi(x)$            | $\Phi(x) + x \cdot \phi(x)$       |
 | SiLU / Swish | $x \cdot \sigma(x)$          | $\sigma(x)(1 + x(1 - \sigma(x)))$ |
+-->
 
----
-
-### Probability & Loss
-
-| Name                 | $f$                              | $df/dx$                   |
-| -------------------- | -------------------------------- | ------------------------- |
-| Softmax              | $s_i = e^{x_i} / \sum_j e^{x_j}$ | $s_i (\delta_{ij} - s_j)$ |
-| Log-Softmax          | $\log s_i$                       | $\delta_{ij} - s_j$       |
-| **XEnt + Softmax ★** | $-\log s_y$                      | $p_i - y_i$               |
-| KL Divergence        | $\sum_i p_i \log(p_i / q_i)$     | $-p_i / q_i$              |
+| Softmax | $s_i = e^{x_i} / \sum_j e^{x_j}$ | $s_i (\delta_{ij} - s_j)$ |
+| Log-Softmax | $\log s_i$ | $\delta_{ij} - s_j$ |
+| **XEnt + Softmax ★** | $-\log s_y$ | $p_i - y_i$ |
+| KL Divergence | $\sum_i p_i \log(p_i / q_i)$ | $-p_i / q_i$ |
 
 **Why the ★ matters.** The softmax Jacobian and the log cancel — the gradient collapses to **predicted − target**. That's why cross-entropy with softmax is the numerically stable default for classification.
 
