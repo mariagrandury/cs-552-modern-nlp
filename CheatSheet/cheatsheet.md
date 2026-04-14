@@ -5,16 +5,16 @@
 ## 1. Word Embeddings
 
 One-hot $\mathbf{e}_w \in \{0,1\}^{|V|}$: orthogonal ⇒ no similarity. Dense $\mathbf{e}_w \in \mathbb{R}^d$, $d \ll |V|$: geometry encodes meaning (**distributional hypothesis**).
-
-- **Skip-gram** — predict context from center $w_t$. Captures **contextual associations**. Dynamic window: sample $i \in [1,N]$, closer words seen more often.
-- **CBOW** — predict center from summed context ⇒ removes word order (bag-of-words). Captures **substitutable words** (synonyms). Projection $U \in \mathbb{R}^{V \times d}$ maps context vector to one score per vocab word, dot product $U \cdot h_t$ gives scores $\in \mathbb{R}^V$.
-- **Negative sampling** — replace $|V|$-softmax with $O(k)$ binary classification. **Hierarchical softmax** — tree-structured approximation of full $|V|$-softmax, used in practice for compute reasons.
-- **GloVe** — $J = \sum f(X_{ij})(w_i^\top \tilde w_j + b_i + \tilde b_j - \log X_{ij})^2$. **Global** co-occurrence matrix; W2V uses local windows. Combines matrix factorization efficiency with W2V linear substructures.
-- **FastText** — splits words into character n-grams ⇒ handles morphology, typos, OOV.
+**Skip-gram** — predict context from center $w_t$. Captures **contextual associations**. Dynamic window: sample $i \in [1,N]$, closer words seen more often.
+**CBOW** — predict center from summed context ⇒ removes word order (bag-of-words). Captures **substitutable words** (synonyms). Projection $U \in \mathbb{R}^{V \times d}$ maps context vector to one score per vocab word, dot product $U \cdot h_t$ gives scores $\in \mathbb{R}^V$.
+**Negative sampling** — replace $|V|$-softmax with $O(k)$ binary classification. 
+**Hierarchical softmax** — tree-structured approximation of full $|V|$-softmax, used in practice for compute reasons.
+**GloVe** — $J = \sum f(X_{ij})(w_i^\top \tilde w_j + b_i + \tilde b_j - \log X_{ij})^2$. **Global** co-occurrence matrix; W2V uses local windows. Combines matrix factorization efficiency with W2V linear substructures.
+**FastText** — splits words into character n-grams ⇒ handles morphology, typos, OOV.
 
 **Static** embeddings: one vector per type ⇒ polysemy unsolved. One-hot can't capture similarity even with smoothing (it redistributes mass but never creates similarity structure).
 
-**Pipeline:** (1) Tokenization → vectors, (2) Model → representations, (3) Head (classifier) → prediction, (4) Backprop.
+**Backprop**: compute partial deriv through layers, improves time efficiency but increases memory requirements (stores computation map for every partial gradient).
 **Logits** = raw unnormalized scores from last linear layer, no probabilistic interpretation. **Probabilities** = softmax(logits): exponentiate all scores (→ positive), divide by sum (→ sum to 1).
 **Weight tying:** input embedding matrix and output projection $W_o$ are transposes (vocab→$d$ vs $d$→vocab) ⇒ optimized jointly. Embeddings shared across all instances of same word.
 
@@ -22,21 +22,21 @@ One-hot $\mathbf{e}_w \in \{0,1\}^{|V|}$: orthogonal ⇒ no similarity. Dense $\
 
 ## 2. N-gram LMs
 
-Markov: $P(w_t|w_{1:t-1}) \approx P(w_t|w_{t-n+1:t-1})$. MLE: $\hat P = C(\text{ctx},w)/C(\text{ctx})$. **Perplexity** $= P(W)^{-1/N}$ = exponentiated avg NLL. Uniform baseline: PPL = $|V|$.
+Markov: $P(w_t|w_{1:t-1}) \approx P(w_t|w_{t-n+1:t-1})$. Max likelihood estimation (**MLE**): $\hat P (w|c) = C(w,c)/ \sum_i C(w_i,c)$. **Perplexity** $= P(W)^{-1/N}$ = exponentiated avg negative loglikelihood (NLL). Uniform baseline: PPL = $|V|$.
 
 - **Smoothing:** redistributes prob from seen to unseen patterns. **Laplace** (add $\alpha$ to every count; games PPL w/o improving LM), **back-off** (fall back to lower n-gram when count is 0), **linear interpolation,** weighted mix of n-gram probs: ($P = \sum_i \lambda_i P_{\text{i-gram}}$), $\sum \lambda_i = 1$. **Kneser-Ney** continuation probability: how many distinct contexts a word appears in, not raw freq.
-- **Zipf's law:** word freq ~2× the next ⇒ long tail drives sparsity. Even Google only used 5-grams.
+- **Zipf's law:** word freq ~2× the next ⇒ long tail drives sparsity.
 - **Limits:** sparsity, can't generalize across synonyms, no distributed representation, no cross-word generalization (each word atomic), hard context cap at $n-1$.
 - **PPL issues:** Can't compare PPL across different vocab sizes (larger vocab ⇒ higher PPL). Domain mismatch inflates PPL. PPL > $|V|$ = worse than random (sanity check).
-- **Fixed-context neural LM (Bengio):** represent n-gram as NN. Concatenate $n$ embeddings → hidden layer → softmax over $V$. No sparsity (softmax ≠ 0), smaller model. But fixed window, no weight sharing across positions ⇒ enlarging window explodes $W$.
+- **Fixed-context neural LM (Bengio):** represent n-gram as NN. Concatenate $n$ embeddings + hidden layer + softmax over $V$. Dims: embed dim, embed dim · input tokens, hidden dim. No sparsity (softmax ≠ 0). Too small for long deps. Fixed window, no weight sharing across positions ⇒ enlarging window explodes $W$.
 
 ---
 
 ## 3. RNN & LSTM
 
-**RNN:** $h_t = \tanh(W_h h_{t-1} + W_x x_t + b)$, shapes: $x_t$`(B,d)`, $h_t$`(B,h)`. Same $W_h, W_x$ reused ⇒ parameter sharing = translation invariance. Unlimited context in theory.
+**RNN:** $h_t = \tanh(W_h h_{t-1} + W_x x_t + b)$, shapes: $x_t$`(B,d)`, $h_t$`(B,h)`. Same $W_h, W_x$ reused ⇒ weight sharing = translation invariance. Unlimited context in theory.
 
-**Vanishing gradient:** $\partial\mathcal{L}/\partial h_0 = \prod_{t} \partial h_t/\partial h_{t-1} \to 0$ when product of **activation derivative** (usually <1, esp. sigmoid) **times** $W_{hh}$ (small due to regularization) is repeatedly multiplied. Early context forgotten. **Exploding gradients:** dominant singular value >1 ⇒ gradients grow exponentially. Fix: **gradient clipping** — rescale all gradients proportionally when global norm exceeds threshold (preserves direction). Also: sequential ⇒ no parallelism.
+**Vanishing gradient:** $\partial\mathcal{L}/\partial h_0 = \prod_{t} \partial h_t/\partial h_{t-1} \to 0$ when product of **activation derivative** (<1, esp. sigmoid) x $W_{hh}$ (small due to regularization) repeated ⇒ early context forgotten. **Exploding:** dominant singular value >1 ⇒ fix with **gradient clipping** (rescale when norm > threshold, preserves direction). Sequential ⇒ no parallelism.
 
 **LSTM** — cell uses **addition** ⇒ gradient highway: $\partial c_T/\partial c_t \approx \prod f_\tau \approx \text{const when } f \approx 1$.
 
@@ -75,6 +75,8 @@ _If forget gate = 1 always?_ Unbounded accumulator — never forgets. The forget
 
 **Exposure bias:** teacher forcing trains on gold prefix ≠ inference on own outputs ⇒ errors compound. **Scheduled sampling:** gradually replace gold with model predictions during training.
 
+d_model = n_heads \* d_heads
+
 ---
 
 ## 5. Transformer
@@ -111,7 +113,7 @@ Drop recurrence. $\text{Attn}(Q,K,V) = \text{softmax}(QK^\top/\sqrt{d_k})V$. Seq
 
 <!-- _Shortcoming of BPE?_ Greedy merge by raw frequency ignores how informative each token is. _Why does ByT5 use a heavy encoder / light decoder?_ To compensate for much longer byte sequences. -->
 
-Special tokens: `<pad>` (uniform batch length for computation graph; unnecessary if batch_s=1), `<unk>`, `<s>` (BOS), `</s>` (EOS, learn when to stop). BPE needs (whitespace) pre-tokenization ⇒ fails without spaces (Chinese, Thai) unless SentencePiece.
+Special tokens: `<pad>` (uniform batch length for GPU processing; unnecessary if batch_s=1, sorted-length seq avoid compute waste), `<unk>`, `<s>` (BOS), `</s>` (EOS, learn when to stop). BPE needs (whitespace) pre-tokenization ⇒ fails without spaces (Chinese, Thai) unless SentencePiece.
 
 ---
 
@@ -119,21 +121,26 @@ Special tokens: `<pad>` (uniform batch length for computation graph; unnecessary
 
 **Contextual** embeddings fix polysemy. Pretraining: self-supervised on large corpus (easy objectives, naturally occurring data), then fine-tune.
 
-**ELMo (2018).** Two separate unidirectional LSTMs, concatenated. "Bidirectional" is **fake**, no shared params between directions. Shared: input embeddings + vocab projection layer between both LSTMs. Embedding = $\gamma \sum_j s_j h_j$ (task-weighted sum across all layers; learn $\gamma, s_j$ per task, don't update pretrained params). Lower layers ≈ syntax, upper ≈ semantics. _Why not just use the last layer?_ Different tasks benefit from different layers.
+**ELMo (2018).** Two separate unidirectional LSTMs, concatenated. "Bidirectional" is **fake**, no shared params between directions. Shared: input embeddings + vocab projection layer between both LSTMs. Generates contextualized embeddings. Embedding = $\gamma \sum_j s_j h_j$ (task-weighted sum across all layers; learn $\gamma, s_j$ per task, don't update pretrained params). Lower layers ≈ syntax, upper ≈ semantics. _Why not just use the last layer?_ Different tasks benefit from different layers.
 
-**BERT (2019).** Encoder-only, truly bidirectional. Diff w/ Transformer: **learned** position embeddings + **segment** embeddings (distinguish sentence A/B). MLM: mask 15% (80% `[MASK]`, 10% random, 10% unchanged — prevents train/test mismatch). `[CLS]` at front (convention; bidirectional ⇒ any position works). **Whole-word masking** helps named entities (`[MASK]bama`). Cannot generate text. BERT: better to fully fine-tune (vs ELMo: adapt only some params). **Learning**: Heads learn diverse concepts, emergently.
+**BERT (2019).** Encoder-only, truly bidirectional. Diff w/ Transformer: **learned** position embeddings + **segment** embeddings (distinguish sentence A/B). Pretraining: Masked Language Modeling (MLM) and next-sentence prediction. mask 15% (80% `[MASK]`, 10% random, 10% unchanged — prevents train/test mismatch). `[CLS]` at front (convention; bidirectional ⇒ any position works). **Whole-word masking** helps named entities (`[MASK]bama`). Cannot generate text. BERT: better to fully fine-tune (vs ELMo: adapt only some params). **Learning**: Heads learn diverse concepts, emergently.
 
 **ELECTRA.** Discriminator classifies **every** token as real/corrupted ⇒ full-signal training (vs BERT's 15%).
-
 **GPT.** Decoder-only, causal masking, no cross-attention. `[CLS]` at **end** (only position with full context). **GPT2:** same arch, larger, strong zero-shot.
-
 **BART.** BERT encoder + GPT decoder. Best corruption: text infilling + sentence permutation. Classification: input to both encoder AND decoder. Handles BERT + generation (autoregressive decoder).
-**T5:** all tasks as text-to-text.
-**DistilBERT,** 3 losses: MLM + distillation (soft probs from teacher) + embedding cosine.
+**T5:** seq2seq, read corrupted input bidir + decode masked spans autoregressively, all tasks as text-to-text (prefix).
+**DistilBERT,** 3 losses. 1. Masked Language Modeling, MLM: student-predicted masked tokens (predicted labels) vs true labels. 2. Distillation: student vs teacher soft probs (prob distrib over V). 3. Embedding cosine: cos dist between student-teacher sentence embeddings (from the last hidden layer).
 **RoBERTa:** BERT trained longer on more data.
+**SBERT**: On top of a transformer layer, there is a pooling layer, which pools the token level embeddings into a single sentence level embedding. The network uses a siamese architecture, i.e. 2 sentences are embedded separately from each other (the BERT/pooling layers on either side of SBERT is the same network).
+encoder → CLS token; decoder-only → last token or mean/sum-pool.
 
+Inference: `with torch.no_grad(): pred = model(**inputs).logits.argmax(dim=-1)`
+do not compute gradients, more efficient.
+
+<!--
 **FT details:** When loading pretrained weights, UNEXPECTED keys (e.g. MLM head) are safe to ignore; MISSING keys (classifier head) are freshly initialized - those are what you fine-tune.
-**Sentence similarity** (siamese arch): 2 models with shared params, encoder → CLS token; decoder-only → last token or mean/sum-pool.
+Bias: classification head is randomly initialized (before FT), the bias term in the output layer could by chance heavily favor the negative class logit. (DistilBERT exercise)
+-->
 
 ---
 
@@ -151,30 +158,33 @@ Special tokens: `<pad>` (uniform batch length for computation graph; unnecessary
 
 Temperature applied **before** top-k/top-p. Top-p: include token that makes cumsum **exceed** $p$ (implementation: **shift mask right by 1**), then renormalize.
 
+**Beam search:**
+`no_repeat_ngram_size=n` sets prob of repeated n-gram to 0
+`repetition_penalty` penalizes all repeating tokens (can break named entities, problematic with BPE: penalizes stopwords, plural "s").
+
 <!--
-**Beam search extras:** `no_repeat_ngram_size=n` sets prob of repeated n-gram to 0 (but breaks proper nouns like "New York"). `repetition_penalty` penalizes all repeating tokens (problematic with BPE — penalizes stopwords). `length_penalty` = score / $\text{len}^\alpha$ (positive $\alpha$ ⇒ longer outputs).
 _Why does beam score higher BLEU but worse human judgment?_ Beam maximizes $\log P(Y)$ ⇒ short, generic, high-prob completions. Humans reward informativeness, not likelihood.
 -->
 
 **Repetition trap:** greedy/beam NLL decreases with repetition ⇒ self-reinforcing loops.
 
 **Re-ranking:** generate multiple sequences, rerank by score. Recalibrate: k-NN, combine with 2nd model (MT).
-**KV Cache:** reuse `past_key_values` ⇒ avoid recomputing hidden states at each step.
+**KV Cache:** reuse `past_key_values` ⇒ avoid recomputing hidden states at each step. `self.model(**inputs, use_cache=True)`
 
-**Eval metrics.** BLEU: n-gram precision, MT, no semantics. ROUGE: n-gram recall, summarization, no semantics. BERTScore: contextual sim, depends on BERT. BLEURT: BERT regression, grammar + meaning, needs training. COMET: neural, human correlation, requires source+hyp+ref. LLM-as-judge: rubric-based, flexible, position bias, self-preference.
+**Eval metrics.** BLEU (0-1 or 100): n-gram overlap counts (n=1-4, min 1 4-gram match for BLEU>0), MT, no semantics, bad for corpus w/ variable length seq, dep on tokenizer. ROUGE: n-gram recall, summarization, no semantics. BERTScore: contextual sim, depends on BERT. BLEURT: BERT regression, grammar + meaning, needs training. COMET: neural, human correlation, requires source+hyp+ref. LLM-as-judge: rubric-based, flexible, position bias, self-preference.
 Also, Pyramid (summ), SPICE (captioning), SPIDEr (SPICE+CIDEr), Word Mover's Distance (embedding sim). N-gram metrics degrade as tasks become more open-ended. PPL of generated text measures model calibration, not generation quality (repetition scores well). Humans: never compare across studies, clear guidelines, calibration examples.
 
 ---
 
 ## 9. RLHF, DPO & Beyond
 
-**Why RL?** MLE optimizes next-token likelihood; human preferences aren't differentiable through discrete samples ⇒ policy gradient.
+RLHF: 1. train RM from human pref, 2. use RL to optimize a LM against that learned reward. Issues: RM noise (diff human), RHacking (policy exploits RM weaknesses).
 
 **REINFORCE:** $\nabla_\theta \mathbb{E}[r] = \mathbb{E}[r(x,y) \cdot \nabla_\theta \log \pi_\theta(y|x)]$. Reward **scales the loss**: high reward → larger loss → learn to reproduce; low reward → loss near 0 → don't update much. High variance ⇒ subtract baseline $b$: $(r - b)$ without changing expected gradient. **Credit assignment:** reward applied at sequence level (hard to assign per-token). **Variance reduction** via baseline (e.g. BLEU 0–100 range). Stabilize: **joint optimization** $\mathcal{L} = \mathcal{L}_\text{MLE} + \alpha\mathcal{L}_\text{RL}$ (MLE term promotes fluency since RL alone doesn't always generate readable text). **Reward gaming:** RL can optimize metrics (higher BLEU/ROUGE) without improving human judgment. Start RL only after model is already somewhat calibrated (SFT first).
 
-**RLHF pipeline:** (1) **SFT** on demonstrations → (2) **RM** on preference pairs: $\mathcal{L}_\text{RM} = -\log\sigma(r_\phi(y^w) - r_\phi(y^l))$ (Bradley-Terry) → (3) **PPO**: $\max \mathbb{E}[r_\phi] - \beta\text{KL}[\pi_\theta \| \pi_\text{ref}]$. PPO clips $\pi_\theta/\pi_\text{ref}$ to $[1-\epsilon, 1+\epsilon]$ (REINFORCE updates are unbounded).
+**RLHF pipeline:** (1) **SFT** on demonstrations (needed bc near-random policy gives no useful RL signal) → (2) **RM** on preference pairs: $\mathcal{L}_\text{RM} = -\log\sigma(r_\phi(y^w) - r_\phi(y^l))$ (Bradley-Terry) → (3) **PPO**: $\max \mathbb{E}[r_\phi] - \beta\text{KL}[\pi_\theta \| \pi_\text{ref}]$. PPO clips $\pi_\theta/\pi_\text{ref}$ to $[1-\epsilon, 1+\epsilon]$ (REINFORCE updates are unbounded).
 
-**KL term** prevents **reward hacking** — without it, $\pi_\theta$ drifts to OOD text that exploits RM blind spots. _Using a politeness classifier as reward?_ Model learns to add "please" 20× — reward hacking.
+**KL term** prevents RH avoiding $\pi_\theta$ drift to OOD text that exploits RM blind spots.
 
 **DPO:** $\mathcal{L} = -\log\sigma\!\left(\beta\log\frac{\pi_\theta(y^w)}{\pi_\text{ref}(y^w)} - \beta\log\frac{\pi_\theta(y^l)}{\pi_\text{ref}(y^l)}\right)$. Eliminates explicit RM and RL loop. Same optimum, simpler.
 
@@ -182,9 +192,7 @@ Also, Pyramid (summ), SPICE (captioning), SPIDEr (SPICE+CIDEr), Word Mover's Dis
 
 **GRPO:** sample $G$ outputs, advantage = $(R_i - \mu)/\sigma$, PPO-style clipping ($\epsilon=0.2$) + KL penalty. KL estimator: $\exp(\delta)-\delta-1$ where $\delta = \log\pi_\text{ref} - \log\pi_\theta$ (always $\geq 0$). **Fails when all $G$ correct OR all wrong** — $\sigma=0$ ⇒ no gradient. GRPO replaces PPO's value network (critic) ⇒ halves memory.
 
-**RLVR:** binary reward from programmatic check — no RM needed (⇒ no RM noise or reward hacking).
-
-_Why not skip SFT?_ Near-random policy gives no useful RL signal.
+**RLVR:** binary reward from programmatic check — no RM needed (⇒ no RM noise/RH).
 
 <!-- Model doesn't follow instructions; RM trained on instruction-following; near-random policy gives no useful signal. SFT puts the policy where the RM is informative. -->
 
@@ -194,17 +202,21 @@ _Why not skip SFT?_ Near-random policy gives no useful RL signal.
 
 **Emergence:** quantitative changes → qualitative changes. ICL emergent ~175B params.
 
-**ICL:** prompt-based, **zero weight updates**. Uses demos for task format, not input→output mapping — works with wrong labels. Sensitive to example selection/order (worse in SLM). Better for tasks w/ terms frequent in pretraining.
+**ICL:** prompt-based, **zero weight updates**. Uses demos for task format, not input→output mapping — works with wrong labels. Sensitive to example selection/order (worse in SLM). Better for tasks w/ terms frequent in pretraining. Examples required, no 0-shot. **Few-shot can hurt:** context label imbalance or lexical cues bias predictions.
 
-**Cloze prompting (PET):** classification as fill-mask. **Verbalizer** maps labels→words; choice strongly affects accuracy. RoBERTa tokenizes with leading space: use `"\u0120"+word` for token lookup.
+**Cloze prompting, Pattern Exploiting Training (PET):** classification as fill-mask, few-shot learning. Tune linear class head (mostly an MLP layer, attached on the top of original pretrained model) instead of entire model. **Verbalizer** maps labels→words; choice strongly affects accuracy. RoBERTa tokenizes with leading space: use `"\u0120"+word` for token lookup.
 
-**Few-shot can hurt:** context label imbalance or lexical cues bias predictions.
+**CoT:** reasoning steps before answer, needs scale. Each new token attends to prev gen reasoning, better than all reasoning in 1 forward pass within its hidden states. **Zero-shot CoT:** "Let's think step by step." Few-shot CoT: task + reasoning format. **Self-Consistency:** sample $N$ responses w/ T>0, majority vote, $N\times$ compute, why: errors random but correct reasoning converges.
 
-**Instruction tuning:** fine-tune on (instruction, response) ⇒ zero-shot generalization to unseen tasks. Updates weights.
-
-**CoT:** reasoning steps before answer, needs scale. **Zero-shot CoT:** "Let's think step by step." **Self-Consistency:** sample $N$ responses w/ T>0, majority vote, $N\times$ compute.
+<!--
+Why CoT works: When a model is asked to directly produce an answer to a multi-step problem, it must perform all the reasoning in a single forward pass (i.e., within its hidden states). By generating intermediate steps as tokens, the model gets additional "computation" — each new token can attend to the previously generated reasoning, effectively allowing the model to decompose complex problems into simpler sub-problems.
+Why this helps beyond zero-shot CoT: When the model generates its own reasoning structure from scratch (zero-shot CoT), it often makes formatting errors, skips steps, or loses track of intermediate results. The demonstrations provide a template for clean reasoning, reducing these errors.
+Self-consistency: This is an ensemble method over reasoning paths. Each sample explores a different trajectory through the reasoning space. Errors tend to be random (spread across wrong answers), while correct reasoning converges (clusters on the right answer).
+-->
 
 **AutoPrompt:** gradient-guided search for optimal tokens. Best prompt sometimes random-looking ⇒ foundation of **jailbreaking**. **Soft prompts/prompt-tuning:** instead of discrete tokens, learn continuous prompt representations. Model frozen, only prompt vectors trained.
+
+**Instruction tuning:** fine-tune on (instruction, response) ⇒ zero-shot generalization to unseen tasks. Updates weights.
 
 **Efficient FT:** **Adapters** (FFN inserts between layers), **LoRA** (low rank $\Delta W = AB$, $r \ll d$, frozen base).
 
