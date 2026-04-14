@@ -187,7 +187,41 @@ Also, Pyramid (summ), SPICE (captioning), SPIDEr (SPICE+CIDEr), Word Mover's Dis
 
 ---
 
-## 9. RLHF, DPO, GRPO
+## 9. ICL, Instruction Tuning & Scaling
+
+**Emergence:** quantitative changes → qualitative changes. ICL emergent ~175B params.
+
+**ICL:** prompt-based, **zero weight updates**. Uses demos for task format, not input→output mapping — works with wrong labels. Sensitive to example selection/order (worse in SLM). Better for tasks w/ terms frequent in pretraining. Examples required, no 0-shot. **Few-shot can hurt:** context label imbalance or lexical cues bias predictions.
+
+**Cloze prompting, Pattern Exploiting Training (PET):** classification as fill-mask, few-shot learning. Tune linear class head (mostly an MLP layer, attached on the top of original pretrained model) instead of entire model. **Verbalizer** maps labels→words; choice affects accuracy.
+
+**CoT:** reasoning steps before answer, needs scale. Each new token attends to prev gen reasoning, better than all reasoning in 1 forward pass within its hidden states. **Zero-shot CoT:** "Let's think step by step." Few-shot CoT: task + reasoning format. **Self-Consistency:** sample $N$ responses w/ T>0, majority vote, $N\times$ compute, why: errors random but correct reasoning converges.
+
+<!--
+Why CoT works: When a model is asked to directly produce an answer to a multi-step problem, it must perform all the reasoning in a single forward pass (i.e., within its hidden states). By generating intermediate steps as tokens, the model gets additional "computation" — each new token can attend to the previously generated reasoning, effectively allowing the model to decompose complex problems into simpler sub-problems.
+Why this helps beyond zero-shot CoT: When the model generates its own reasoning structure from scratch (zero-shot CoT), it often makes formatting errors, skips steps, or loses track of intermediate results. The demonstrations provide a template for clean reasoning, reducing these errors.
+Self-consistency: This is an ensemble method over reasoning paths. Each sample explores a different trajectory through the reasoning space. Errors tend to be random (spread across wrong answers), while correct reasoning converges (clusters on the right answer).
+-->
+
+**AutoPrompt:** gradient-guided search for optimal tokens. Best prompt sometimes random-looking ⇒ foundation of **jailbreaking**. **Soft prompts/prompt-tuning:** instead of discrete tokens, learn continuous prompt representations. Model frozen, only prompt vectors trained.
+
+**Soft prompts or prompt tuning:** init special prompt vector(s), prepend to task example, gradient of loss wrt prompt params, update prompt params (rest frozen). More efficient than full ft, multi-task. Less interpretable than discrete prompts.
+
+**Efficient FT:** keep pretrained params frozen, init new FFN layers and adapt only those. Keep FNN limited in #params (= 2\*d\*r), r = rank = FNN hidden dim.
+**Adapters**: FFN between transformer blocks.
+**LoRA**: FFN alongside.
+
+**Instruction tuning:** (instruction, response) ⇒ 0-shot generalization to unseen tasks. Updates weights.
+
+**Test-time scaling:** more reasoning tokens (compute) ⇒ higher accuracy.
+
+<!--
+_Why does RLHF make models sycophantic?_ RM rewards confident answers; KL limits but can't prevent drift; human raters prefer confident wrong over uncertain correct. Calibration is not in the loss.
+-->
+
+---
+
+## 10. RLHF, DPO, GRPO
 
 RLHF: 1. train RM from human pref, 2. use RL to optimize a LM against that learned reward. Issues: RM noise (diff human), RHacking (policy exploits RM weaknesses).
 
@@ -206,36 +240,6 @@ RLHF: 1. train RM from human pref, 2. use RL to optimize a LM against that learn
 **RLVR:** binary reward from programmatic check — no RM needed (⇒ no RM noise/RH).
 
 <!-- Model doesn't follow instructions; RM trained on instruction-following; near-random policy gives no useful signal. SFT puts the policy where the RM is informative. -->
-
----
-
-## 10. ICL, Instruction Tuning & Scaling
-
-**Emergence:** quantitative changes → qualitative changes. ICL emergent ~175B params.
-
-**ICL:** prompt-based, **zero weight updates**. Uses demos for task format, not input→output mapping — works with wrong labels. Sensitive to example selection/order (worse in SLM). Better for tasks w/ terms frequent in pretraining. Examples required, no 0-shot. **Few-shot can hurt:** context label imbalance or lexical cues bias predictions.
-
-**Cloze prompting, Pattern Exploiting Training (PET):** classification as fill-mask, few-shot learning. Tune linear class head (mostly an MLP layer, attached on the top of original pretrained model) instead of entire model. **Verbalizer** maps labels→words; choice affects accuracy.
-
-**CoT:** reasoning steps before answer, needs scale. Each new token attends to prev gen reasoning, better than all reasoning in 1 forward pass within its hidden states. **Zero-shot CoT:** "Let's think step by step." Few-shot CoT: task + reasoning format. **Self-Consistency:** sample $N$ responses w/ T>0, majority vote, $N\times$ compute, why: errors random but correct reasoning converges.
-
-<!--
-Why CoT works: When a model is asked to directly produce an answer to a multi-step problem, it must perform all the reasoning in a single forward pass (i.e., within its hidden states). By generating intermediate steps as tokens, the model gets additional "computation" — each new token can attend to the previously generated reasoning, effectively allowing the model to decompose complex problems into simpler sub-problems.
-Why this helps beyond zero-shot CoT: When the model generates its own reasoning structure from scratch (zero-shot CoT), it often makes formatting errors, skips steps, or loses track of intermediate results. The demonstrations provide a template for clean reasoning, reducing these errors.
-Self-consistency: This is an ensemble method over reasoning paths. Each sample explores a different trajectory through the reasoning space. Errors tend to be random (spread across wrong answers), while correct reasoning converges (clusters on the right answer).
--->
-
-**AutoPrompt:** gradient-guided search for optimal tokens. Best prompt sometimes random-looking ⇒ foundation of **jailbreaking**. **Soft prompts/prompt-tuning:** instead of discrete tokens, learn continuous prompt representations. Model frozen, only prompt vectors trained.
-
-**Instruction tuning:** fine-tune on (instruction, response) ⇒ zero-shot generalization to unseen tasks. Updates weights.
-
-**Efficient FT:** **Adapters** (FFN inserts between layers), **LoRA** (low rank $\Delta W = AB$, $r \ll d$, frozen base).
-
-**Test-time scaling:** more reasoning tokens (compute) ⇒ higher accuracy.
-
-<!--
-_Why does RLHF make models sycophantic?_ RM rewards confident answers; KL limits but can't prevent drift; human raters prefer confident wrong over uncertain correct. Calibration is not in the loss.
--->
 
 ---
 
