@@ -20,7 +20,7 @@ Dense (vs sparse): encode similarity, easier to include as ML features, generali
 
 ## 2. N-gram LMs
 
-Markov: $P(w_t|w_{1:t-1}) \approx P(w_t|w_{t-n+1:t-1})$. Max likelihood estimation (**MLE**): $\hat P (w|c) = C(w,c)/ \sum_i C(w_i,c)$. NB: $P(+|X) = (P(X|+)·P(+))/P(X), P(X)=P(X|-)P(-)+P(X|+)P(+), P(X|+)=\prod P(n-gram|+). **Perplexity** $= P(W)^{-1/N}$ = exponentiated avg negative loglikelihood (NLL). Uniform baseline: PPL = $|V|$.
+Markov: $P(w_t|w_{1:t-1}) \approx P(w_t|w_{t-n+1:t-1})$. Max likelihood estimation (**MLE**): $\hat P (w|c) = C(w,c)/ \sum_i C(w_i,c)$. NB: $P(+|X) = (P(X|+)·P(+))/P(X), P(X)=P(X|-)P(-)+P(X|+)P(+), P(X|+)=\prod P(n-gram|+). **Perplexity** $= P(W)^{-1/N}$ = exponentiated avg negative loglikelihood (NLL). Uniform baseline: PPL = $|V|$. PPL = k, model being confused among k tokens in the vocab on avg.
 
 <!-- Prob sequence in 1-gram, n-gram -->
 
@@ -69,7 +69,7 @@ $f=1$ always ⇒ unbounded accumulator, never forgets. Forget gate enables selec
 ## 4. Seq2Seq & Attention
 
 **Seq2Seq:** encoder compresses source into fixed $c = h_n$ `(B,h)`. Decoder autoregressively conditions on $c$, **cannot be bidirectional**.
-**Temporal bottleneck:** single vector for arbitrary-length input.
+**Temporal bottleneck:** single fixed-size state vector for arbitrary-length input.
 
 **Attention:** $e_{t,s} = v^\top\tanh(W_h h^d_{t-1} + W_s h^e_s)$, $\alpha_{t,s} = \text{softmax}_s(e_{t,s})$, $c_t = \sum_s \alpha_{t,s} h^e_s$.
 Shapes: $e_t$`(B,n)`, $\alpha_t$`(B,n)`, $c_t$`(B,h)`.
