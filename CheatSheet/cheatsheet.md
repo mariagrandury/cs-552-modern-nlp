@@ -4,46 +4,31 @@
 
 ## 1. Word Embeddings
 
-One-hot $\mathbf{e}_w \in \{0,1\}^{|V|}$ are always orthogonal ⇒ no similarity structure even for synonyms. Dense $\mathbf{e}_w \in \mathbb{R}^d$, $d \ll |V|$: geometry encodes meaning (**distributional hypothesis**).
+One-hot $\mathbf{e}_w \in \{0,1\}^{|V|}$: orthogonal ⇒ no similarity. Dense $\mathbf{e}_w \in \mathbb{R}^d$, $d \ll |V|$: geometry encodes meaning (**distributional hypothesis**).
 
-- **Skip-gram** — predict context from center $w_t$; more updates for rare words than CBOW. Tends to capture **contextual associations**. Window typically dynamic: set large N (e.g. 10), randomly sample $i \in [1,N]$ so closer words seen more often.
-- **CBOW** — predict center from summed context ⇒ destroys word order (bag-of-words). Tends to capture **substitutable words** (synonyms).
-- **Negative sampling** — replace $|V|$-softmax with $O(k)$ binary classification.
-- **GloVe** — $J = \sum f(X_{ij})(w_i^\top \tilde w_j + b_i + \tilde b_j - \log X_{ij})^2$. Explicitly factorizes log co-occurrence; W2V implicitly factorizes shifted PMI. GloVe uses **global** co-occurrence statistics; W2V uses local windows. Combines statistical efficiency of matrix factorization with meaningful linear substructures from W2V.
-
+- **Skip-gram** — predict context from center $w_t$. Captures **contextual associations**. Dynamic window: sample $i \in [1,N]$, closer words seen more often.
+- **CBOW** — predict center from summed context ⇒ removes word order (bag-of-words). Captures **substitutable words** (synonyms). Projection $U \in \mathbb{R}^{V \times d}$ maps context vector to one score per vocab word, dot product $U \cdot h_t$ gives scores $\in \mathbb{R}^V$.
+- **Negative sampling** — replace $|V|$-softmax with $O(k)$ binary classification. **Hierarchical softmax** — tree-structured approximation of full $|V|$-softmax, used in practice for compute reasons.
+- **GloVe** — $J = \sum f(X_{ij})(w_i^\top \tilde w_j + b_i + \tilde b_j - \log X_{ij})^2$. **Global** co-occurrence matrix; W2V uses local windows. Combines matrix factorization efficiency with W2V linear substructures.
 - **FastText** — splits words into character n-grams ⇒ handles morphology, typos, OOV.
-- **Hierarchical softmax** — tree-structured approximation of full $|V|$-softmax, used in practice for compute reasons.
 
-**CBOW dimensions:** input $x_s \in \mathbb{R}^{d \times 1}$, projection $U \in \mathbb{R}^{V \times d}$ maps context vector to one score per vocab word. Dot product $U \cdot h_t$ gives confidence scores $\in \mathbb{R}^V$.
+**Static** embeddings: one vector per type ⇒ polysemy unsolved. One-hot can't capture similarity even with smoothing (it redistributes mass but never creates similarity structure).
 
-**Issues:** both are **static** (one vector per type ⇒ polysemy unsolved). One-hot can't capture similarity even with smoothing — smoothing redistributes mass but never creates similarity structure.
-
-**NLP model pipeline:** (1) **Tokenization** — map text to vectors, (2) **Model** — compose embeddings into representations, (3) **Head** — classifier (e.g. logistic regression) maps representation to prediction, (4) Learn via backprop.
-
+**Pipeline:** (1) Tokenization → vectors, (2) Model → representations, (3) Head (classifier) → prediction, (4) Backprop.
 **Logits** = raw unnormalized scores from last linear layer, no probabilistic interpretation. **Probabilities** = softmax(logits): exponentiate all scores (→ positive), divide by sum (→ sum to 1).
-
-**Weight tying** in text generation: input embedding matrix and output projection $W_o$ are transposes of each other (vocab→$d$ vs $d$→vocab) ⇒ optimized jointly. Embeddings shared across all instances of same word.
-
-**Sentence embeddings from word embeddings:** average-pool or max-pool token vectors ⇒ fixed-size `(emb_dim,)`. OOV tokens are skipped. Simplest classifier: `Linear(emb_dim, 1) + Sigmoid + BCELoss`
+**Weight tying:** input embedding matrix and output projection $W_o$ are transposes (vocab→$d$ vs $d$→vocab) ⇒ optimized jointly. Embeddings shared across all instances of same word.
 
 ---
 
 ## 2. N-gram LMs
 
-Markov: $P(w_t|w_{1:t-1}) \approx P(w_t|w_{t-n+1:t-1})$. MLE: $\hat P = C(\text{ctx},w)/C(\text{ctx})$. **Perplexity** $= P(W)^{-1/N}$ = exponentiated avg NLL. **Uniform LM baseline:** PPL = $|V|$.
+Markov: $P(w_t|w_{1:t-1}) \approx P(w_t|w_{t-n+1:t-1})$. MLE: $\hat P = C(\text{ctx},w)/C(\text{ctx})$. **Perplexity** $= P(W)^{-1/N}$ = exponentiated avg NLL. Uniform baseline: PPL = $|V|$.
 
-- **Smoothing** redistributes prob from seen to unseen patterns:
-  - **Laplace** — add $\alpha$ to every count. Issue: games PPL without improving the LM.
-  - **Back-off** — fall back to lower-order n-gram when count is 0.
-  - **Linear interpolation** — weighted mix of n-gram probs: $P = \sum_i \lambda_i P_{\text{i-gram}}$, $\sum \lambda_i = 1$. Lambdas are hyperparams.
-  - **Kneser-Ney** — continuation probability: how many distinct contexts a word appears in, not raw freq.
-- **Zipf's law:** each word appears ~2× as often as the next most frequent ⇒ long tail of rare words drives sparsity.
-- **Limits:** sparsity, no cross-word generalization (cat≠dog), hard context cap at $n-1$. Even Google with the entire web only used 5-gram models.
-- _Why can't perfect smoothing generalize across synonyms?_ No distributed representation — each word is atomic.
-- Cannot compare perplexity across models with **different vocab sizes** (larger vocab ⇒ higher PPL mechanically). Also: PPL < $|V|$ is a good sanity check (otherwise worse than uniform random).
-- **Perplexity issues:** (1) domain mismatch inflates PPL (train on news, test on code), (2) common tokens with low semantic content affect scores.
-
-**Fixed-context neural LM (Bengio 2003):** represent n-gram as NN. Concatenate $n$ word embeddings → hidden layer → softmax over $V$. **Advantages** over n-gram: no sparsity (softmax never gives 0 prob), smaller model. **Disadvantage:** fixed window, weights not shared across positions (if position changes, different params encode the word ⇒ computationally inefficient, and enlarging window explodes $W$).
+- **Smoothing:** redistributes prob from seen to unseen patterns. **Laplace** (add $\alpha$ to every count; games PPL w/o improving LM), **back-off** (fall back to lower n-gram when count is 0), **linear interpolation,** weighted mix of n-gram probs: ($P = \sum_i \lambda_i P_{\text{i-gram}}$), $\sum \lambda_i = 1$. **Kneser-Ney** continuation probability: how many distinct contexts a word appears in, not raw freq.
+- **Zipf's law:** word freq ~2× the next ⇒ long tail drives sparsity. Even Google only used 5-grams.
+- **Limits:** sparsity, can't generalize across synonyms, no distributed representation, no cross-word generalization (each word atomic), hard context cap at $n-1$.
+- **PPL issues:** Can't compare PPL across different vocab sizes (larger vocab ⇒ higher PPL). Domain mismatch inflates PPL. PPL > $|V|$ = worse than random (sanity check).
+- **Fixed-context neural LM (Bengio):** represent n-gram as NN. Concatenate $n$ embeddings → hidden layer → softmax over $V$. No sparsity (softmax ≠ 0), smaller model. But fixed window, no weight sharing across positions ⇒ enlarging window explodes $W$.
 
 ---
 
@@ -88,7 +73,7 @@ _If forget gate = 1 always?_ Unbounded accumulator — never forgets. The forget
 - Fixes bottleneck (capacity scales with source length), provides soft alignment, direct gradient path.
 - Still $O(n)$ sequential (RNN-based). Cross-attention: $O(n \cdot m)$. Decoder self-attention at inference: $O(n^2)$ ⇒ motivates **KV caching** (store past K,V; only compute new query).
 
-**Exposure bias:** teacher forcing trains on gold prefix, but at inference model conditions on own (possibly wrong) outputs. Small early error → model enters unseen state space → errors compound. **Scheduled sampling:** gradually replace ground-truth inputs with model predictions during training, closing the train/test distribution gap.
+**Exposure bias:** teacher forcing trains on gold prefix ≠ inference on own outputs ⇒ errors compound. **Scheduled sampling:** gradually replace gold with model predictions during training.
 
 ---
 
@@ -108,97 +93,76 @@ Drop recurrence. $\text{Attn}(Q,K,V) = \text{softmax}(QK^\top/\sqrt{d_k})V$. Seq
 
 **Residuals** let layers learn deltas. **LayerNorm** normalizes across hidden dim per token. **Pre-norm** (modern): LayerNorm before attention/FFN. **Post-norm** (original): LayerNorm after. Pre-norm trains more stably. **FFN** ($d→4d→d$, GeLU) transforms each position independently — attention mixes across positions, FFN provides per-token nonlinearity. `intermediate_size` is usually 4× `hidden_dim`.
 
-**PE:** self-attention is permutation-equivariant ⇒ PE required. Sinusoidal: $\sin(p/10000^{2i/d})$, $\cos(p/10000^{2i/d})$. **Add** (don't concat). Learned PE can't generalize beyond training length. Embedding scaled by $\sqrt{H}$ to balance magnitude vs PE.
-
-**Cross-attn visualization:** `attn_weights` shape `[B,nH,S_tgt,S_src]` — row $i$ col $j$ = how much target token $i$ attends to source token $j$. Different heads show different alignment patterns.
+**PE:** attention is permutation-equivariant ⇒ PE required. Sinusoidal $\sin(p/10000^{2i/d})$ or learned. **Add** (don't concat). Learned can't generalize beyond training length. Embedding scaled by $\sqrt{H}$. to balance magnitude vs PE.
+**Cross-attn:** `attn_weights` shape `[B,nH,S_tgt,S_src]
 
 ---
 
 ## 6. Tokenization
 
-Word-level: OOV, huge vocab, ignores morphology. Char-level: no OOV but sequences too long ⇒ hard to learn word meaning. **Subword** = sweet spot: frequent words stay whole, rare words decompose.
+**Subword** = sweet spot between word-level (OOV) and char-level (too long seq).
 
-| Method            | Used by    | How it picks merges                                     | Key difference         |
-| ----------------- | ---------- | ------------------------------------------------------- | ---------------------- |
-| **BPE**           | GPT, Llama | most frequent adjacent pair                             | raw frequency only     |
-| **WordPiece**     | BERT       | $\text{freq(pair)}/(\text{freq(a)}\cdot\text{freq(b)})$ | mutual information     |
-| **SentencePiece** | mT5        | no pre-tokenization                                     | language-agnostic      |
-| **Byte-level**    | ByT5       | UTF-8 bytes (vocab=256)                                 | no OOV ever, long seqs |
+| Method            | Used by    | Merge criterion                                         | Key difference    |
+| ----------------- | ---------- | ------------------------------------------------------- | ----------------- |
+| **BPE**           | GPT, Llama | most frequent pair                                      | raw frequency     |
+| **WordPiece**     | BERT       | $\text{freq(pair)}/(\text{freq(a)}\cdot\text{freq(b)})$ | mutual info       |
+| **SentencePiece** | mT5        | no pre-tokenization                                     | language-agnostic |
+| **Byte-level**    | ByT5       | UTF-8 bytes (vocab=256)                                 | no OOV, long seqs |
 
-_Shortcoming of BPE?_ Greedy merge by raw frequency ignores how informative each token is. _Why does ByT5 use a heavy encoder / light decoder?_ To compensate for much longer byte sequences.
+<!-- _Shortcoming of BPE?_ Greedy merge by raw frequency ignores how informative each token is. _Why does ByT5 use a heavy encoder / light decoder?_ To compensate for much longer byte sequences. -->
 
-Special tokens: `<pad>` (same-length batches for computation graph; unnecessary if batch_size=1), `<unk>`, `<s>` (BOS), `</s>` (EOS — model learns when to stop). BPE requires pre-tokenization (whitespace split) ⇒ fails for languages without spaces (Chinese, Thai) unless SentencePiece is used.
+Special tokens: `<pad>` (uniform batch length for computation graph; unnecessary if batch_s=1), `<unk>`, `<s>` (BOS), `</s>` (EOS, learn when to stop). BPE needs (whitespace) pre-tokenization ⇒ fails without spaces (Chinese, Thai) unless SentencePiece.
 
 ---
 
 ## 7. Pretrained LMs
 
-**Contextual** embeddings finally fix polysemy (each token conditioned on sentence).
+**Contextual** embeddings fix polysemy. Pretraining: self-supervised on large corpus (easy objectives, naturally occurring data), then fine-tune.
 
-**ELMo (2018).** Two separate unidirectional LSTMs (forward + backward), concatenated output. "Bidirectional" is **fake** — no shared params between directions, just concatenation. **Shared:** input embeddings + vocab projection layer between both LSTMs. Embedding = $\gamma \sum_j s_j h_j$ (task-weighted sum across all layers; learn $\gamma, s_j$ per task, don't update pretrained params). Lower layers ≈ syntax, upper ≈ semantics. _Why not just use the last layer?_ Different tasks benefit from different layers. Key advance: contextual embeddings (vs static) gave big improvements.
+**ELMo (2018).** Two separate unidirectional LSTMs, concatenated. "Bidirectional" is **fake**, no shared params between directions. Shared: input embeddings + vocab projection layer between both LSTMs. Embedding = $\gamma \sum_j s_j h_j$ (task-weighted sum across all layers; learn $\gamma, s_j$ per task, don't update pretrained params). Lower layers ≈ syntax, upper ≈ semantics. _Why not just use the last layer?_ Different tasks benefit from different layers.
 
-**BERT (2019).** Encoder-only, truly bidirectional. **Key differences from original Transformer:** **learned position embeddings** (not sinusoidal) + **segment embeddings** (distinguish sentence A/B). MLM: mask 15% of tokens (80% `[MASK]`, 10% random, 10% unchanged). _Why 10% random + 10% unchanged?_ If model only saw `[MASK]` during pretraining, it's surprised by real tokens at fine-tuning (train/test mismatch). `[CLS]` at **front** (bidirectional ⇒ attends to all equally; could be anywhere, front is just convention). 30k WordPiece. **Whole-word masking** prevents trivially guessing from remaining subwords (e.g. `[MASK]bama`), especially helps for named entities. BERT **cannot generate** text — no autoregressive masking. _Why can't BERT use causal LM?_ It would see the target ⇒ trivial copy.
+**BERT (2019).** Encoder-only, truly bidirectional. Diff w/ Transformer: **learned** position embeddings + **segment** embeddings (distinguish sentence A/B). MLM: mask 15% (80% `[MASK]`, 10% random, 10% unchanged — prevents train/test mismatch). `[CLS]` at front (convention; bidirectional ⇒ any position works). **Whole-word masking** helps named entities (`[MASK]bama`). Cannot generate text. BERT: better to fully fine-tune (vs ELMo: adapt only some params). **Learning**: Heads learn diverse concepts, emergently.
 
-**ELECTRA.** BERT wastes 85% of tokens (learns only from 15% masked). Small generator produces corruptions; discriminator classifies **every** token as real/replaced ⇒ full-signal training, drastically faster.
+**ELECTRA.** Discriminator classifies **every** token as real/corrupted ⇒ full-signal training (vs BERT's 15%).
 
-**GPT.** Decoder-only, causal masking, no cross-attention. `[CLS]` at **end** (left-to-right ⇒ last position has full context). Natively generative.
+**GPT.** Decoder-only, causal masking, no cross-attention. `[CLS]` at **end** (only position with full context). **GPT2:** same arch, larger, strong zero-shot.
 
-**BART.** BERT encoder + GPT decoder (original Transformer, scaled up). Best corruption: text infilling + sentence permutation. For classification: input to both encoder AND decoder. Handles all BERT/RoBERTa tasks **plus** generation tasks (summarization) because decoder is autoregressive. **T5:** all tasks as text-to-text ("all problems → seq2seq"). Groundbreaking: many tasks solvable with zero-shot generation. Explored many pretraining directions at much larger scale (similar to BART corruptions). **DistilBERT:** 3 losses: MLM + distillation (soft probs from teacher) + embedding cosine. ~97% BERT at 40% fewer params. **RoBERTa:** train BERT longer on more data ⇒ improvement.
+**BART.** BERT encoder + GPT decoder. Best corruption: text infilling + sentence permutation. Classification: input to both encoder AND decoder. Handles BERT + generation (autoregressive decoder).
+**T5:** all tasks as text-to-text.
+**DistilBERT,** 3 losses: MLM + distillation (soft probs from teacher) + embedding cosine.
+**RoBERTa:** BERT trained longer on more data.
 
-**What does BERT learn?** Heads learn diverse concepts. E.g. head 11-6 (sixth head of 11th layer) may capture specific linguistic relations. Heads specialize **emergently**.
-
-**Fine-tuning details:** `lr=2e-5`, `weight_decay=0.01`. When loading pretrained weights: UNEXPECTED keys (e.g. MLM head) are safe to ignore; MISSING keys (classifier head) are freshly initialized — those are what you fine-tune. For sentence pairs: `tokenizer(premise, hypothesis, truncation=True)`.
-
-**Sentence similarity** (siamese architecture): two models with shared params. For encoder models: use CLS token. For decoder-only: use **last token** (most common) or mean/sum-pool.
+**FT details:** When loading pretrained weights, UNEXPECTED keys (e.g. MLM head) are safe to ignore; MISSING keys (classifier head) are freshly initialized - those are what you fine-tune.
+**Sentence similarity** (siamese arch): 2 models with shared params, encoder → CLS token; decoder-only → last token or mean/sum-pool.
 
 ---
 
 ## 8. Text Generation
 
-**Teacher forcing:** train on gold prefix; at inference, model conditions on own outputs ⇒ **exposure bias** (train/test mismatch, errors compound).
+**Teacher forcing** (= SFT): train on gold prefix ⇒ **exposure bias** at inference (errors compound).
 
-**Decoding:**
+| Decoding    | Formula                                       | Tradeoff                                              |
+| ----------- | --------------------------------------------- | ----------------------------------------------------- |
+| Greedy      | $\hat y_t = \arg\max P(y_t \mid y_{<t})$      | fast, repetitive                                      |
+| Beam($b$)   | keep $b$ top hypotheses, b=1→greedy           | ↑BLEU but generic; $O(b^2)$                           |
+| Top-$k$     | sample from top-$k$ tokens                    | fixed $k$: too loose when peaky, aggressive when flat |
+| Top-$p$     | sample from smallest set with $\sum p \geq p$ | adapts to distribution shape                          |
+| Temp $\tau$ | $P' \propto \exp(S_w/\tau)$                   | $\tau→0$: argmax, $\tau→\infty$: uniform              |
 
-| Method      | Formula                                       | Tradeoff                                                  |
-| ----------- | --------------------------------------------- | --------------------------------------------------------- |
-| Greedy      | $\hat y_t = \arg\max P(y_t \mid y_{<t})$      | fast, repetitive                                          |
-| Beam($b$)   | keep $b$ top hypotheses                       | ↑BLEU but generic, repetitive                             |
-| Sampling    | $\hat y_t \sim P(y_t \mid y_{<t})$            | diverse but incoherent (long tail of ~50k tokens)         |
-| Top-$k$     | sample from top-$k$ tokens                    | fixed $k$: too aggressive when flat, too loose when peaky |
-| Top-$p$     | sample from smallest set with $\sum p \geq p$ | adapts to distribution shape                              |
-| Temp $\tau$ | $P' \propto \exp(S_w/\tau)$                   | $\tau\to0$: argmax, $\tau\to\infty$: uniform              |
+Temperature applied **before** top-k/top-p. Top-p: include token that makes cumsum **exceed** $p$ (implementation: **shift mask right by 1**), then renormalize.
 
-**Implementation details:** Top-k: `torch.topk(logits/τ, k)` → softmax → `multinomial`. Top-p: sort descending, cumsum softmax, mask where cumsum > $p$, **shift mask right by 1** so first token exceeding $p$ is kept. Temperature is applied **before** top-k/top-p filtering. `beam=1` = greedy.
-
+<!--
 **Beam search extras:** `no_repeat_ngram_size=n` sets prob of repeated n-gram to 0 (but breaks proper nouns like "New York"). `repetition_penalty` penalizes all repeating tokens (problematic with BPE — penalizes stopwords). `length_penalty` = score / $\text{len}^\alpha$ (positive $\alpha$ ⇒ longer outputs).
-
-**Repetition trap:** greedy/beam NLL _decreases_ with repetition (Holtzman 2020) ⇒ self-reinforcing loops. Worse for transformers than LSTMs (sharper distributions).
-
 _Why does beam score higher BLEU but worse human judgment?_ Beam maximizes $\log P(Y)$ ⇒ short, generic, high-prob completions. Humans reward informativeness, not likelihood.
+-->
 
-**Re-ranking:** generate several sequences from initial model distribution, then rerank based on a score (e.g. perplexity — but repetitive sequences can get low PPL). Other recalibration: k-NN, combine with 2nd model's distribution (e.g. MT model + target language LM).
+**Repetition trap:** greedy/beam NLL decreases with repetition ⇒ self-reinforcing loops.
 
-**KV Cache:** `use_cache=True` + recycle `past_key_values` ⇒ avoid recomputing all hidden states at each step.
+**Re-ranking:** generate multiple sequences, rerank by score. Recalibrate: k-NN, combine with 2nd model (MT).
+**KV Cache:** reuse `past_key_values` ⇒ avoid recomputing hidden states at each step.
 
-**Evaluation metrics:**
-
-| Metric           | Type                  | What it measures         | Fatal flaw                     |
-| ---------------- | --------------------- | ------------------------ | ------------------------------ |
-| **BLEU**         | n-gram precision      | MT quality               | no semantics                   |
-| **ROUGE**        | n-gram recall         | summarization            | same                           |
-| **BERTScore**    | contextual cosine sim | semantic similarity      | depends on underlying model    |
-| **BLEURT**       | BERT regression       | grammaticality + meaning | needs training data            |
-| **COMET**        | neural, trained on DA | best human correlation   | requires source+hyp+ref        |
-| **LLM-as-judge** | rubric-based          | flexible                 | position bias, self-preference |
-| **Human**        | gold standard         | everything               | slow, expensive, inconsistent  |
-
-_Why not perplexity of generated text?_ Greedy decoders that produce repetitive garbage would score best. Perplexity of _reference_ text measures model calibration, not generation quality.
-
-**Pyramid** (summarization, semantic), **SPICE** (image captioning, semantic), **SPIDEr** (mix of SPICE + CIDEr). **Word Mover's Distance:** measure distance between 2 sequences using word embedding similarity.
-
-N-gram metrics get **progressively worse** as tasks become more open-ended: MT → summarization → dialogue → story generation. BLEU needs ≥1 matching 4-gram to be >0. Reordered words get high BLEU-1 but 0 BLEU-4. **Metric-human correlation** measured via **Kendall's Tau** (rank concordance).
-
-**Human evaluation guidelines:** NEVER compare human eval scores across differently-conducted studies (different guidelines, different annotator interpretations). Write clear guidelines, check time spent, provide calibration examples. Don't just rely on numbers — vibe check!
+**Eval metrics.** BLEU: n-gram precision, MT, no semantics. ROUGE: n-gram recall, summarization, no semantics. BERTScore: contextual sim, depends on BERT. BLEURT: BERT regression, grammar + meaning, needs training. COMET: neural, human correlation, requires source+hyp+ref. LLM-as-judge: rubric-based, flexible, position bias, self-preference.
+Also, Pyramid (summ), SPICE (captioning), SPIDEr (SPICE+CIDEr), Word Mover's Distance (embedding sim). N-gram metrics degrade as tasks become more open-ended. PPL of generated text measures model calibration, not generation quality (repetition scores well). Humans: never compare across studies, clear guidelines, calibration examples.
 
 ---
 
@@ -218,84 +182,65 @@ N-gram metrics get **progressively worse** as tasks become more open-ended: MT �
 
 **GRPO:** sample $G$ outputs, advantage = $(R_i - \mu)/\sigma$, PPO-style clipping ($\epsilon=0.2$) + KL penalty. KL estimator: $\exp(\delta)-\delta-1$ where $\delta = \log\pi_\text{ref} - \log\pi_\theta$ (always $\geq 0$). **Fails when all $G$ correct OR all wrong** — $\sigma=0$ ⇒ no gradient. GRPO replaces PPO's value network (critic) ⇒ halves memory.
 
-**RLVR (Reinforcement Learning with Verifiable Rewards):** binary reward from programmatic check (math, coding) — no reward model needed. Avoids RM noise and reward hacking.
+**RLVR:** binary reward from programmatic check — no RM needed (⇒ no RM noise or reward hacking).
 
-_Why can't you skip SFT?_ Model doesn't follow instructions; RM trained on instruction-following; near-random policy gives no useful signal. SFT puts the policy where the RM is informative.
+_Why not skip SFT?_ Near-random policy gives no useful RL signal.
+
+<!-- Model doesn't follow instructions; RM trained on instruction-following; near-random policy gives no useful signal. SFT puts the policy where the RM is informative. -->
 
 ---
 
 ## 10. ICL, Instruction Tuning & Scaling
 
-**Emergence:** quantitative changes (more params/data) produce qualitative changes in behavior. "An ability is emergent if not present in smaller models but present in larger models." ICL is emergent — works well starting ~175B params.
+**Emergence:** quantitative changes → qualitative changes. ICL emergent ~175B params.
 
-**ICL:** task specified via prompt, **zero weight updates**. Model uses demos for task **format/distribution**, not input→output mapping — works even with **wrong labels**. Sensitive to example selection and order (worse in small models). Works better for tasks with terms frequently mentioned in pretraining corpus.
+**ICL:** prompt-based, **zero weight updates**. Uses demos for task format, not input→output mapping — works with wrong labels. Sensitive to example selection/order (worse in SLM). Better for tasks w/ terms frequent in pretraining.
 
-**Prompting as cloze (PET):** reformulate classification as fill-mask. **Verbalizer** maps labels to words (e.g. `great→positive`). **Template** wraps input with `<mask>`. Verbalizer choice **strongly affects accuracy** (e.g. `great/horrible`=85.8% vs `great/terrible`=88.6% on IMDB). RoBERTa tokenizes with leading space: use `"\u0120"+word` for token lookup.
+**Cloze prompting (PET):** classification as fill-mask. **Verbalizer** maps labels→words; choice strongly affects accuracy. RoBERTa tokenizes with leading space: use `"\u0120"+word` for token lookup.
 
-**Few-shot prompting can hurt:** context label imbalance or dominant lexical cues bias the mask prediction. 10 examples degraded negative accuracy to ~7% in one experiment.
+**Few-shot can hurt:** context label imbalance or lexical cues bias predictions.
 
-**Zero-shot prompting works** because MLM pretraining already captures sentiment associations ("great" follows positive text in pretraining data). _Why does untrained classifier head give ~33% on NLI?_ Randomly initialized weights ⇒ random predictions.
+**Instruction tuning:** fine-tune on (instruction, response) ⇒ zero-shot generalization to unseen tasks. Updates weights.
 
-**Instruction tuning:** fine-tune on (instruction, response) pairs ⇒ zero-shot generalization to _unseen_ task types. Updates weights (unlike ICL).
+**CoT:** reasoning steps before answer, needs scale. **Zero-shot CoT:** "Let's think step by step." **Self-Consistency:** sample $N$ responses w/ T>0, majority vote, $N\times$ compute.
 
-**CoT:** include reasoning steps in examples ⇒ model generates reasoning before answer. Requires sufficient scale. **Zero-shot CoT:** just append "Let's think step by step." ICL addresses "what to do"; CoT addresses "how to reason" — they solve different bottlenecks.
+**AutoPrompt:** gradient-guided search for optimal tokens. Best prompt sometimes random-looking ⇒ foundation of **jailbreaking**. **Soft prompts/prompt-tuning:** instead of discrete tokens, learn continuous prompt representations. Model frozen, only prompt vectors trained.
 
-**Self-Consistency:** sample $N$ responses with $\tau > 0$, extract answer, **majority vote**. Errors are random (spread across wrong answers); correct reasoning converges. Expected: Zero-shot < Zero-shot CoT < Few-shot CoT < Self-Consistency. Cost: $N\times$ compute.
+**Efficient FT:** **Adapters** (FFN inserts between layers), **LoRA** (low rank $\Delta W = AB$, $r \ll d$, frozen base).
 
-**AutoPrompt:** gradient-guided search for optimal prompt tokens. Sometimes best prompt = random-looking sequence of words — foundation of **jailbreaking** (force misbehavior with adversarial token sequences = vectors).
+**Test-time scaling:** more reasoning tokens (compute) ⇒ higher accuracy.
 
-**Soft prompts / prompt tuning:** instead of discrete tokens, learn continuous prompt representations. Model frozen, only prompt vectors trained.
-
-**Efficient FT:** **Adapters** — small FFN inserts between layers. **LoRA** — low-rank $\Delta W = AB$, $r \ll d$, frozen base.
-
-**Test-time scaling:** trade inference compute for accuracy. More reasoning tokens ⇒ higher accuracy. Thinking budget controls max reasoning; can force-end early.
-
+<!--
 _Why does RLHF make models sycophantic?_ RM rewards confident answers; KL limits but can't prevent drift; human raters prefer confident wrong over uncertain correct. Calibration is not in the loss.
+-->
 
 ---
 
 ## 11. Dataset Artifacts
 
-**Annotation artifacts:** annotators systematically add negation for contradiction, extra info for neutral. **Hypothesis-only baseline:** 69% on SNLI (vs 33% random), ~57% even with simpler models ⇒ model learns annotator patterns, not reasoning. Few annotators (380 for 402k MNLI examples) ⇒ individual writing style is a learnable signal.
+**Mitigation:** contrast sets (more examples), adversarial filtering (weaker model finds spurious examples), bias-only ensemble (update params only for samples where bias model failed, e.g. hypothesis-only for NLI), data augmentation, annotation guidelines.
 
-**OOD test (McCoy 2019):** ~100% when OOD labels align with training bias, ~0% otherwise ⇒ pure shortcut exploitation.
+**Pretraining data matters most.** Quality heuristics can be flawed (e.g. filtering "sex" from C4). Good benchmarks: monotonic, low variance (CommonsenseQA, HellaSwag,OpenBookQA, PIQA). Bad: SocialIQA, TruthfulQA. Benchmarks are aggregations — one problem cascades.
 
-**Mitigation:**
-
-- **Contrast sets** — add more examples to balance the dataset.
-- **Adversarial filtering** — use weaker/simpler model to find easy-to-predict (spurious) examples, remove them. Even deterministic models work.
-- **Bias-only ensemble** — train bias-only model (e.g. hypothesis-only for NLI), then update main model params **only for samples where bias-only model failed** (or had low confidence).
-- **Data augmentation** — more data = more diverse examples.
-- Balanced annotation guidelines.
-
-**Pretraining data matters most.** "The 'it' in AI models is the dataset." Models are good at what the data covers. Quality heuristics can be flawed (e.g. filtering "sex" from C4). Good eval benchmarks: monotonic performance increase over time, low variance (e.g. CommonsenseQA, HellaSwag, OpenBookQA, PIQA). Bad: SocialIQA, TruthfulQA.
-
-**Benchmarks** are aggregations of datasets, which are aggregations of samples — one problem can cascade, results may not be reliable.
-
-**Prompting biases:** verbalizer choice impacts quality (word frequency in pretraining data matters). Model can be biased towards one label independently of prompt choices — e.g. if more positive examples in few-shot, or if chosen words appear more often in positive contexts.
-
-**Inter-annotator agreement:** Cohen's Kappa (2 raters), Fleiss' Kappa (>2), Krippendorff's Alpha. But filtering by agreement can eliminate legitimate ambiguity.
+**Inter-annotator agreement:** Cohen's κ (2 raters), Fleiss' κ (>2), Krippendorff's α. But filtering by agreement can eliminate legitimate ambiguity.
 
 ---
 
 ## Derivatives
 
-| Name                 | $f$                              | $df/dx$                    |
-| -------------------- | -------------------------------- | -------------------------- |
-| Power rule           | $x^n$                            | $n \cdot x^{n-1}$          |
-| General exp          | $a^x$                            | $a^x \cdot \ln a$          |
-| Log base $a$         | $\log_a x$                       | $1 / (x \ln a)$            |
-| Sigmoid              | $\sigma(x) = 1/(1 + e^{-x})$     | $\sigma(x)(1 - \sigma(x))$ |
-| Tanh                 | $\tanh(x)$                       | $1 - \tanh^2(x)$           |
-| ReLU                 | $\max(0, x)$                     | $1$ if $x > 0$ else $0$    |
-| Softmax              | $s_i = e^{x_i} / \sum_j e^{x_j}$ | $s_i (\delta_{ij} - s_j)$  |
-| Log-Softmax          | $\log s_i$                       | $\delta_{ij} - s_j$        |
-| **XEnt + Softmax ★** | $-\log s_y$                      | $p_i - y_i$                |
-| KL Divergence        | $\sum_i p_i \log(p_i / q_i)$     | $-p_i / q_i$               |
+| Name                | $f$                              | $df/dx$                    |
+| ------------------- | -------------------------------- | -------------------------- |
+| Power rule          | $x^n$                            | $n \cdot x^{n-1}$          |
+| General exp         | $a^x$                            | $a^x \cdot \ln a$          |
+| Log base $a$        | $\log_a x$                       | $1 / (x \ln a)$            |
+| Sigmoid             | $\sigma(x) = 1/(1 + e^{-x})$     | $\sigma(x)(1 - \sigma(x))$ |
+| Tanh                | $\tanh(x)$                       | $1 - \tanh^2(x)$           |
+| ReLU                | $\max(0, x)$                     | $1$ if $x > 0$ else $0$    |
+| Softmax             | $s_i = e^{x_i} / \sum_j e^{x_j}$ | $s_i (\delta_{ij} - s_j)$  |
+| **XEnt + Softmax"** | $-\log s_y$                      | $p_i - y_i$                |
+| KL Divergence       | $\sum_i p_i \log(p_i / q_i)$     | $-p_i / q_i$               |
 
-**Why the ★ matters.** The softmax Jacobian and the log cancel — the gradient collapses to **predicted − target**. That's why cross-entropy with softmax is the numerically stable default for classification.
-
----
+"Softmax Jacobian and log cancel → gradient = **predicted − target**. That's why cross-entropy with softmax is the numerically stable default for classification.
 
 ### Layers & Normalization
 
@@ -305,7 +250,7 @@ _Why does RLHF make models sycophantic?_ RM rewards confident answers; KL limits
 | Linear (input)        | $Wx + b$                                    | $W^\top \cdot \delta$                                                                                                                             |
 | Linear (bias)         | $Wx + b$                                    | $\delta$                                                                                                                                          |
 | Layer Norm            | $\gamma \cdot (x - \mu)/\sigma + \beta$     | $(\gamma/\sigma)\left[\partial_{\hat y} L - \text{mean}(\partial_{\hat y} L) - \hat y \cdot \text{mean}(\partial_{\hat y} L \cdot \hat y)\right]$ |
-| Attention (V)         | $\text{softmax}(QK^\top / \sqrt d) \cdot V$ | $S^\top \cdot \partial_O L$                                                                                                                       |
+| Attention (V)         | $\text{softmax}(QK^\top / \sqrt d) \cdot V$ | $S^\top \cdot \partial_O$                                                                                                                         |
 | Attention ($QK^\top$) | $\text{softmax}(QK^\top / \sqrt d) \cdot V$ | $J_{\text{softmax}}(\partial_S L) / \sqrt d$                                                                                                      |
 
 ---
