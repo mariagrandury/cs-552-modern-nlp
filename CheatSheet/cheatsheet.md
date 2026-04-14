@@ -1,34 +1,36 @@
-# Modern NLP Cheatsheet
-
----
-
 ## 1. Word Embeddings
 
-One-hot $\mathbf{e}_w \in \{0,1\}^{|V|}$: orthogonal ⇒ no similarity. Dense $\mathbf{e}_w \in \mathbb{R}^d$, $d \ll |V|$: geometry encodes meaning (**distributional hypothesis**).
-**Skip-gram** — predict context from center $w_t$. Captures **contextual associations**. Dynamic window: sample $i \in [1,N]$, closer words seen more often.
-**CBOW** — predict center from summed context ⇒ removes word order (bag-of-words). Captures **substitutable words** (synonyms). Projection $U \in \mathbb{R}^{V \times d}$ maps context vector to one score per vocab word, dot product $U \cdot h_t$ gives scores $\in \mathbb{R}^V$.
-**Negative sampling** — replace $|V|$-softmax with $O(k)$ binary classification. 
-**Hierarchical softmax** — tree-structured approximation of full $|V|$-softmax, used in practice for compute reasons.
-**GloVe** — $J = \sum f(X_{ij})(w_i^\top \tilde w_j + b_i + \tilde b_j - \log X_{ij})^2$. **Global** co-occurrence matrix; W2V uses local windows. Combines matrix factorization efficiency with W2V linear substructures.
-**FastText** — splits words into character n-grams ⇒ handles morphology, typos, OOV.
+One-hot $e_w \in \{0,1\}^{|V|}$: orthogonal ⇒ no similarity. Dense $e_w \in R^d$, $d \ll |V|$: geometry encodes meaning (**distributional hypothesis**).
+**Skip-gram:** predict context from center $w_t$. Captures **contextual associations**. Dynamic (but fixed) window: sample $i \in [1,N]$, closer words seen more often.
+**CBOW:** predict center from summed context ⇒ removes word order (bag-of-words). Captures **substitutable words** (synonyms). Projection $U \in R^{V \times d}$ maps context vector to one score per vocab word, dot product $U \cdot h_t$ gives scores $\in R^V$.
+**Negative sampling:** replace $|V|$-softmax with $O(k)$ binary classification.
+**GloVe:** $J = \sum f(X_{ij})(w_i^\top \tilde w_j + b_i + \tilde b_j - \log X_{ij})^2$.
+Word2Vec iteratively updates embeds on local contexts, GloVe efficiently leverage global stats once the c-matrix built.
 
-**Static** embeddings: one vector per type ⇒ polysemy unsolved. One-hot can't capture similarity even with smoothing (it redistributes mass but never creates similarity structure).
+<!-- **FastTex:t** splits words into character n-grams ⇒ handles morphology, typos, OOV. -->
 
-**Backprop**: compute partial deriv through layers, improves time efficiency but increases memory requirements (stores computation map for every partial gradient).
-**Logits** = raw unnormalized scores from last linear layer, no probabilistic interpretation. **Probabilities** = softmax(logits): exponentiate all scores (→ positive), divide by sum (→ sum to 1).
+**Static** embeddings: one vector per type ⇒ polysemy unsolved.
+Dense (vs sparse): encode similarity, easier to include as ML features, generalize better to rare words. Both no representation for unseen words.
+
+**Backprop**: compute gradients of loss wrt weights through layers, improves time efficiency but increases memory requirements (stores computation map for every partial gradient).
+**Logits** = raw unnormalized scores from last linear layer, no prob interpret. **Probs** = softmax(logits): exponentiate all scores (→ positive), divide by sum (→ sum to 1).
 **Weight tying:** input embedding matrix and output projection $W_o$ are transposes (vocab→$d$ vs $d$→vocab) ⇒ optimized jointly. Embeddings shared across all instances of same word.
 
 ---
 
 ## 2. N-gram LMs
 
-Markov: $P(w_t|w_{1:t-1}) \approx P(w_t|w_{t-n+1:t-1})$. Max likelihood estimation (**MLE**): $\hat P (w|c) = C(w,c)/ \sum_i C(w_i,c)$. **Perplexity** $= P(W)^{-1/N}$ = exponentiated avg negative loglikelihood (NLL). Uniform baseline: PPL = $|V|$.
+Markov: $P(w_t|w_{1:t-1}) \approx P(w_t|w_{t-n+1:t-1})$. Max likelihood estimation (**MLE**): $\hat P (w|c) = C(w,c)/ \sum_i C(w_i,c)$. NB: $P(+|X) = (P(X|+)·P(+))/P(X), P(X)=P(X|-)P(-)+P(X|+)P(+), P(X|+)=\prod P(n-gram|+). **Perplexity** $= P(W)^{-1/N}$ = exponentiated avg negative loglikelihood (NLL). Uniform baseline: PPL = $|V|$.
 
-- **Smoothing:** redistributes prob from seen to unseen patterns. **Laplace** (add $\alpha$ to every count; games PPL w/o improving LM), **back-off** (fall back to lower n-gram when count is 0), **linear interpolation,** weighted mix of n-gram probs: ($P = \sum_i \lambda_i P_{\text{i-gram}}$), $\sum \lambda_i = 1$. **Kneser-Ney** continuation probability: how many distinct contexts a word appears in, not raw freq.
-- **Zipf's law:** word freq ~2× the next ⇒ long tail drives sparsity.
-- **Limits:** sparsity, can't generalize across synonyms, no distributed representation, no cross-word generalization (each word atomic), hard context cap at $n-1$.
-- **PPL issues:** Can't compare PPL across different vocab sizes (larger vocab ⇒ higher PPL). Domain mismatch inflates PPL. PPL > $|V|$ = worse than random (sanity check).
-- **Fixed-context neural LM (Bengio):** represent n-gram as NN. Concatenate $n$ embeddings + hidden layer + softmax over $V$. Dims: embed dim, embed dim · input tokens, hidden dim. No sparsity (softmax ≠ 0). Too small for long deps. Fixed window, no weight sharing across positions ⇒ enlarging window explodes $W$.
+<!-- Prob sequence in 1-gram, n-gram -->
+
+**Smoothing:** redistributes prob from seen to unseen patterns (but does not create similarity structure). **Laplace** (add $\alpha$ to every count; games PPL w/o improving LM), **back-off** (fall back to lower n-gram when count is 0), **linear interpolation,** weighted mix of n-gram probs: ($P = \sum_i \lambda_i P_{\text{i-gram}}$), $\sum \lambda_i = 1$. **Kneser-Ney** continuation probability: how many distinct contexts a word appears in, not raw freq.
+
+<!-- **Zipf's law:** word freq ~2× the next ⇒ long tail drives sparsity. -->
+
+**Limits:** sparsity, can't generalize across synonyms, no distributed representation, no cross-word generalization (each word atomic), hard context cap at $n-1$.
+**PPL issues:** Can't compare PPL across different vocab sizes (larger vocab ⇒ higher PPL). Domain mismatch inflates PPL. PPL > $|V|$ = worse than random (sanity check).
+**Fixed-context neural LM (Bengio):** represent n-gram as NN. Concatenate $n$ embeddings + hidden layer + softmax over $V$. Dims: embed dim, embed dim · input tokens, hidden dim. No sparsity (softmax ≠ 0). Too small for long deps. Fixed window, no weight sharing across positions ⇒ enlarging window explodes $W$.
 
 ---
 
@@ -36,7 +38,8 @@ Markov: $P(w_t|w_{1:t-1}) \approx P(w_t|w_{t-n+1:t-1})$. Max likelihood estimati
 
 **RNN:** $h_t = \tanh(W_h h_{t-1} + W_x x_t + b)$, shapes: $x_t$`(B,d)`, $h_t$`(B,h)`. Same $W_h, W_x$ reused ⇒ weight sharing = translation invariance. Unlimited context in theory.
 
-**Vanishing gradient:** $\partial\mathcal{L}/\partial h_0 = \prod_{t} \partial h_t/\partial h_{t-1} \to 0$ when product of **activation derivative** (<1, esp. sigmoid) x $W_{hh}$ (small due to regularization) repeated ⇒ early context forgotten. **Exploding:** dominant singular value >1 ⇒ fix with **gradient clipping** (rescale when norm > threshold, preserves direction). Sequential ⇒ no parallelism.
+**Vanishing gradient:** $\partial\mathcal{L}/\partial h_0 = \prod_{t} \partial h_t/\partial h_{t-1} \to 0$ when product of **activation derivative** (<1, esp. sigmoid) x $W_{hh}$ (small due to regularization) repeated ⇒ early context forgotten.
+Exploding: dominant singular value >1 ⇒ fix with **gradient clipping** (rescale when norm > threshold, preserves direction). Sequential ⇒ no parallelism.
 
 **LSTM** — cell uses **addition** ⇒ gradient highway: $\partial c_T/\partial c_t \approx \prod f_\tau \approx \text{const when } f \approx 1$.
 
@@ -47,56 +50,62 @@ c_t = f_t⊙c_{t-1} + i_t⊙c̃_t     [ADDITIVE cell update]
 o_t = σ(W_o·[h_{t-1},x_t])   h_t = o_t⊙tanh(c_t)
 ```
 
-_If forget gate = 1 always?_ Unbounded accumulator — never forgets. The forget gate enables **selective, bounded** memory. Cell state uses **addition** (not matrix multiply) ⇒ gradient highway: gradients flow through additive path without full weight matrix at each step. When $f \approx 1$: constant error carousel.
+$f=1$ always ⇒ unbounded accumulator, never forgets. Forget gate enables selective memory. Addition (not matrix multiply) ⇒ gradients flow without full weight matrix. If $f \approx 1$: constant error carousel.
 
-**GRU:** simpler gated RNN. $z_t$ = update gate, $r_t$ = reset gate. $h_t = (1-z_t) \odot h_{t-1} + z_t \odot \tilde{h}_t$. Uses **weighted average** ⇒ values stay bounded. $z=1$: forget old state entirely. $z=0$: keep old state. Less powerful than LSTM (fewer gates), but fewer params.
+**GRU:** $h_t = (1-z_t) \odot h_{t-1} + z_t \odot \tilde{h}_t$ (z: update, r: reset). Weighted average ⇒ values stay bounded. $z=1$: forget old state, $z=0$: keep old state. Simpler gated RNN, fewer params than LSTM.
 
-**BiRNN:** two independent RNNs — forward (l→r) and backward (r→l). Output = concatenation of both hidden states ⇒ each token sees both past and future context. Separate params for each direction. Use for: classification, sequence labeling. **Not** for generation (can't see future).
+**BiRNN:** 2 indep RNNs: forward + backward, output: concatenation of both hidden states. Separate params. Use for classification/labeling, **not** generation.
 
-**Multiple layers:** cascade RNN outputs through layers, each with different $W$. Typically 3–4 layers, up to 8–12. Each layer has its own hidden state.
+<!-- each token sees both past and future context -->
 
-**BPTT (Backpropagation Through Time):** unroll the dynamic computation graph into a static one (length known from forward pass), then apply standard backprop. Same matrix $W_{hh}$ appears at every step ⇒ chain of multiplications. Key insight: gradient computations at each layer reuse ("cache") results from the next layer ⇒ efficient.
+**BPTT:** unroll dynamic graph into static (length known from forward pass), apply standard backprop. Same $W_{hh}$ at every step ⇒ chain of multiplications. Gradient computations reuse ("cache") prior layer results.
 
-**Dropout in LSTMs:** standard dropout disrupts cell state gradient flow. Solutions: **variational dropout** (same mask for entire sequence), dropout only on non-recurrent connections, **zoneout** (randomly preserve hidden state units instead of zeroing).
+**LSTM dropout:** standard dropout disrupts cell gradient. Fixes: **variational dropout** (same mask per sequence), dropout only on non-recurrent connections, or **zoneout** (randomly preserve hidden state instead of zeroing).
 
-**Training detail:** loss alignment — `outputs[:, :-1, :]` predicts `labels[:, 1:]` (shifted by 1). Use `ignore_index=pad_idx` in CrossEntropyLoss.
+<!-- **Training:** `outputs[:, :-1, :]` predicts `labels[:, 1:]` (shifted by 1). Use `ignore_index=pad_idx` in CrossEntropyLoss. -->
 
 ---
 
 ## 4. Seq2Seq & Attention
 
-**Seq2Seq:** encoder compresses source into fixed $c = h_n$ `(B,h)`. Decoder generates autoregressively conditioned on $c$. Decoder **cannot be bidirectional** — would make generation trivial at training, impossible at inference. **Teacher forcing:** train on gold prefix $y^*_{<t}$, not model predictions. **Temporal bottleneck:** single fixed-size vector must represent arbitrarily long input — capacity doesn't scale with source length.
+**Seq2Seq:** encoder compresses source into fixed $c = h_n$ `(B,h)`. Decoder autoregressively conditions on $c$, **cannot be bidirectional**.
+**Temporal bottleneck:** single vector for arbitrary-length input.
 
-**Attention:** dynamic context per decoder step. $e_{t,s} = v^\top\tanh(W_h h^d_{t-1} + W_s h^e_s)$, $\alpha_{t,s} = \text{softmax}_s(e_{t,s})$, $c_t = \sum_s \alpha_{t,s} h^e_s$. Shapes: $e_t$`(B,n)`, $\alpha_t$`(B,n)`, $c_t$`(B,h)`.
-
-- **Query-key mechanism** (like database lookup): key = encoder hidden state, query = decoder hidden state. Similarity score determines how much to attend. Scaled dot product most common today.
-- Fixes bottleneck (capacity scales with source length), provides soft alignment, direct gradient path.
-- Still $O(n)$ sequential (RNN-based). Cross-attention: $O(n \cdot m)$. Decoder self-attention at inference: $O(n^2)$ ⇒ motivates **KV caching** (store past K,V; only compute new query).
+**Attention:** $e_{t,s} = v^\top\tanh(W_h h^d_{t-1} + W_s h^e_s)$, $\alpha_{t,s} = \text{softmax}_s(e_{t,s})$, $c_t = \sum_s \alpha_{t,s} h^e_s$.
+Shapes: $e_t$`(B,n)`, $\alpha_t$`(B,n)`, $c_t$`(B,h)`.
+Query-key mechanism: key = encoder hidden state, query = final decoder hidden state, attention = sim score. Fixes bottleneck, soft alignment, direct gradient path enc-dec.
+Still $O(n)$ sequential (RNN-based). Cross-attention: $O(n \cdot m)$. Decoder self-attention at inference: $O(n^2)$ ⇒ motivates **KV caching** (only compute new Q).
 
 **Exposure bias:** teacher forcing trains on gold prefix ≠ inference on own outputs ⇒ errors compound. **Scheduled sampling:** gradually replace gold with model predictions during training.
-
-d_model = n_heads \* d_heads
 
 ---
 
 ## 5. Transformer
 
-Drop recurrence. $\text{Attn}(Q,K,V) = \text{softmax}(QK^\top/\sqrt{d_k})V$. Sequential depth $O(1)$, compute $O(n^2)$.
+$\text{Attn}(Q,K,V) = \text{softmax}(QK^\top/\sqrt{d_k})V$. Sequential depth $O(1)$, compute $O(n^2)$.
+$/\sqrt{d_k}$: High-dim dots grow large ⇒ softmax saturates to one-hot ⇒ vanishing gradients. Scale by $\sqrt{d_\text{head}}$, NOT $\sqrt{d_\text{model}}$.
 
-**Why 3 projections from same $x$?** Without them, self-dot-product dominates ⇒ each token attends mostly to itself. **Why $/\sqrt{d_k}$?** High-dim dots grow large ⇒ softmax saturates to one-hot ⇒ vanishing gradients. Scale by $\sqrt{d_\text{head}}$, NOT $\sqrt{d_\text{model}}$.
+**Multi-head:** $\text{head}_i = \text{Attn}(XW^Q_i, XW^K_i, XW^V_i)$, $\text{MHA} = \text{Concat}(\text{heads})W_O$, $h$ heads at $d/h$ dims ≈ same FLOPs as 1 head at $d$. Specialization is **emergent**. `hidden_dim` divisible by `num_heads`. d_model = n_heads \* d_heads
 
-**Multi-head:** $\text{head}_i = \text{Attn}(XW^Q_i, XW^K_i, XW^V_i)$, $\text{MHA} = \text{Concat}(\text{heads})W_O$. $h$ heads at $d/h$ dims ≈ same FLOPs as 1 head at $d$. Specialization is **emergent**, not enforced. `hidden_dim` must be divisible by `num_heads`.
+**Shapes:** `[B,S,H]` → `.view(B,S,nH,hD).transpose(1,2)` → `[B,nH,S,hD]` → attn `[B,nH,S,S]` → output `[B,nH,S,hD]` → `.transpose(1,2).contiguous().view(B,S,H)`.
 
-**Shapes:** `[B,S,H]` → `.view(B,S,nH,hD)` → `.transpose(1,2)` → `[B,nH,S,hD]` → attn scores `[B,nH,S,S]` → output `[B,nH,S,hD]` → `.transpose(1,2).contiguous().view(B,S,H)`. **`.contiguous()` is required** after transpose before view (memory layout).
-
-**Masks:** Padding `[B,S]`→`[B,1,S,S]` blocks PAD. Causal: `torch.tril` lower-triangle blocks future. Cross-attn is **rectangular** `[S_tgt×S_src]` ($Q$ from decoder, $K$/$V$ from encoder). Decoder mask = causal AND pad (bitwise). Applied via `masked_fill(mask==0, -inf)` ⇒ softmax gives 0. **Why mask before softmax (not multiply scores by 0)?** If we zero out scores directly, remaining scores won't sum to 1 after softmax. Setting to $-\infty$ before softmax ensures proper probability distribution. Causal mask makes training (parallel) and inference (sequential) **computationally identical**.
+**Masks:**
+Padding: `[B,S]`→`[B,1,S,S]`.
+Causal: `torch.tril`.
+Cross-attn: rectangular `[S_tgt×S_src]` ($Q$ dec, $K$/$V$ enc).
+Decoder = causal AND pad.
+`masked_fill(mask==0, -inf)` ⇒ softmax → 0. Why not multiply by 0? Remaining scores won't sum to 1.
+Causal mask makes training (parallel) and inference (sequential) **computationally identical**.
 
 **Self vs cross:** Encoder self-attn: $Q,K,V$ all from $x$, bidirectional. Decoder self-attn: causal masked. Cross-attn: $Q$ from decoder, $K,V$ from encoder output. Encoder = 2 sub-layers (self-attn + FFN). Decoder = 3 sub-layers (masked self-attn + cross-attn + FFN), each with residual + LayerNorm.
-
-**Residuals** let layers learn deltas. **LayerNorm** normalizes across hidden dim per token. **Pre-norm** (modern): LayerNorm before attention/FFN. **Post-norm** (original): LayerNorm after. Pre-norm trains more stably. **FFN** ($d→4d→d$, GeLU) transforms each position independently — attention mixes across positions, FFN provides per-token nonlinearity. `intermediate_size` is usually 4× `hidden_dim`.
-
-**PE:** attention is permutation-equivariant ⇒ PE required. Sinusoidal $\sin(p/10000^{2i/d})$ or learned. **Add** (don't concat). Learned can't generalize beyond training length. Embedding scaled by $\sqrt{H}$. to balance magnitude vs PE.
 **Cross-attn:** `attn_weights` shape `[B,nH,S_tgt,S_src]
+
+<!-- **Why 3 projections from same $x$?** Without them, self-dot-product dominates ⇒ each token attends mostly to itself. -->
+
+**Residuals** let layers learn deltas. **LayerNorm** normalizes across hidden dim per token. Pre-norm (modern) trains more stably. **FFN** ($d→4d→d$, GeLU) transforms each position independently — attention mixes across positions, FFN provides per-token nonlinearity. `intermediate_size` is usually 4× `hidden_dim`.
+
+**PE:** required bc attention is permutation-equivariant. Sinusoidal $\sin(p/10000^{2i/d})$ or learned. **Add** (don't concat). Learned can't generalize beyond training length. Embedding scaled by $\sqrt{H}$. to balance magnitude vs PE.
+**ROPE:** relative positional info by rotating Q&K, generalize better to longer seq than absolute embed.
 
 ---
 
@@ -121,7 +130,7 @@ Special tokens: `<pad>` (uniform batch length for GPU processing; unnecessary if
 
 **Contextual** embeddings fix polysemy. Pretraining: self-supervised on large corpus (easy objectives, naturally occurring data), then fine-tune.
 
-**ELMo (2018).** Two separate unidirectional LSTMs, concatenated. "Bidirectional" is **fake**, no shared params between directions. Shared: input embeddings + vocab projection layer between both LSTMs. Generates contextualized embeddings. Embedding = $\gamma \sum_j s_j h_j$ (task-weighted sum across all layers; learn $\gamma, s_j$ per task, don't update pretrained params). Lower layers ≈ syntax, upper ≈ semantics. _Why not just use the last layer?_ Different tasks benefit from different layers.
+**ELMo (2018).** Two separate unidirectional LSTMs, hidden states from both dirs concatenated at each pos. "Bidirectional" is **fake**, no shared params between directions. Shared: input embeddings + vocab projection layer between both LSTMs. Generates contextualized embeddings. Embedding = task-weighted sum across all layers; learn params per task, don't update pretrained params. Lower layers ≈ syntax, upper ≈ semantics.
 
 **BERT (2019).** Encoder-only, truly bidirectional. Diff w/ Transformer: **learned** position embeddings + **segment** embeddings (distinguish sentence A/B). Pretraining: Masked Language Modeling (MLM) and next-sentence prediction. mask 15% (80% `[MASK]`, 10% random, 10% unchanged — prevents train/test mismatch). `[CLS]` at front (convention; bidirectional ⇒ any position works). **Whole-word masking** helps named entities (`[MASK]bama`). Cannot generate text. BERT: better to fully fine-tune (vs ELMo: adapt only some params). **Learning**: Heads learn diverse concepts, emergently.
 
@@ -162,11 +171,13 @@ Temperature applied **before** top-k/top-p. Top-p: include token that makes cums
 `no_repeat_ngram_size=n` sets prob of repeated n-gram to 0
 `repetition_penalty` penalizes all repeating tokens (can break named entities, problematic with BPE: penalizes stopwords, plural "s").
 
+<!-- Deterministic search algorithm (prob of a seq being generated is 0 or 1) -->
+
 <!--
 _Why does beam score higher BLEU but worse human judgment?_ Beam maximizes $\log P(Y)$ ⇒ short, generic, high-prob completions. Humans reward informativeness, not likelihood.
 -->
 
-**Repetition trap:** greedy/beam NLL decreases with repetition ⇒ self-reinforcing loops.
+**Repetition trap:** NLL **decreases** w/ seq length in greedy/beam, NLL decreases w/ repetition ⇒ self-reinforcing loops.
 
 **Re-ranking:** generate multiple sequences, rerank by score. Recalibrate: k-NN, combine with 2nd model (MT).
 **KV Cache:** reuse `past_key_values` ⇒ avoid recomputing hidden states at each step. `self.model(**inputs, use_cache=True)`
@@ -176,7 +187,7 @@ Also, Pyramid (summ), SPICE (captioning), SPIDEr (SPICE+CIDEr), Word Mover's Dis
 
 ---
 
-## 9. RLHF, DPO & Beyond
+## 9. RLHF, DPO, GRPO
 
 RLHF: 1. train RM from human pref, 2. use RL to optimize a LM against that learned reward. Issues: RM noise (diff human), RHacking (policy exploits RM weaknesses).
 
@@ -204,7 +215,7 @@ RLHF: 1. train RM from human pref, 2. use RL to optimize a LM against that learn
 
 **ICL:** prompt-based, **zero weight updates**. Uses demos for task format, not input→output mapping — works with wrong labels. Sensitive to example selection/order (worse in SLM). Better for tasks w/ terms frequent in pretraining. Examples required, no 0-shot. **Few-shot can hurt:** context label imbalance or lexical cues bias predictions.
 
-**Cloze prompting, Pattern Exploiting Training (PET):** classification as fill-mask, few-shot learning. Tune linear class head (mostly an MLP layer, attached on the top of original pretrained model) instead of entire model. **Verbalizer** maps labels→words; choice strongly affects accuracy. RoBERTa tokenizes with leading space: use `"\u0120"+word` for token lookup.
+**Cloze prompting, Pattern Exploiting Training (PET):** classification as fill-mask, few-shot learning. Tune linear class head (mostly an MLP layer, attached on the top of original pretrained model) instead of entire model. **Verbalizer** maps labels→words; choice affects accuracy.
 
 **CoT:** reasoning steps before answer, needs scale. Each new token attends to prev gen reasoning, better than all reasoning in 1 forward pass within its hidden states. **Zero-shot CoT:** "Let's think step by step." Few-shot CoT: task + reasoning format. **Self-Consistency:** sample $N$ responses w/ T>0, majority vote, $N\times$ compute, why: errors random but correct reasoning converges.
 
@@ -236,7 +247,7 @@ _Why does RLHF make models sycophantic?_ RM rewards confident answers; KL limits
 
 **Inter-annotator agreement:** Cohen's κ (2 raters), Fleiss' κ (>2), Krippendorff's α. But filtering by agreement can eliminate legitimate ambiguity.
 
----
+<!-- TODO review guest lectures--- -->
 
 ## Derivatives
 
