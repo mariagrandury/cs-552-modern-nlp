@@ -20,7 +20,9 @@ Dense (vs sparse): encode similarity, easier to include as ML features, generali
 
 ## 2. N-gram LMs
 
-Markov: $P(w_t|w_{1:t-1}) \approx P(w_t|w_{t-n+1:t-1})$. Max likelihood estimation (**MLE**): $\hat P (w|c) = C(w,c)/ \sum_i C(w_i,c)$. NB: $P(+|X) = (P(X|+)·P(+))/P(X), P(X)=P(X|-)P(-)+P(X|+)P(+), P(X|+)=\prod P(n-gram|+). **Perplexity** $= P(W)^{-1/N}$ = exponentiated avg negative loglikelihood (NLL). Uniform baseline: PPL = $|V|$. PPL = k, model being confused among k tokens in the vocab on avg.
+Markov: $P(w_t|w_{1:t-1}) \approx P(w_t|w_{t-n+1:t-1})$. Max likelihood estimation (**MLE**): $\hat P (w|c) = C(w,c)/ \sum_i C(w_i,c)$. NB: $P(+|X) = (P(X|+)·P(+))/P(X), P(X)=P(X|-)P(-)+P(X|+)P(+), P(X|+)=\prod P(n-gram|+).
+
+**Perplexity** $= P(W)^{-1/N}$ = exponentiated avg negative loglikelihood (NLL). Uniform baseline: PPL = $|V|$. PPL = k, model being confused among k tokens in the vocab on avg. Easy to compute, correlates with fluency, fitting scaling laws.
 
 <!-- Prob sequence in 1-gram, n-gram -->
 
@@ -138,6 +140,7 @@ Special tokens: `<pad>` (uniform batch length for GPU processing; unnecessary if
 **GPT.** Decoder-only, causal masking, no cross-attention. `[CLS]` at **end** (only position with full context). **GPT2:** same arch, larger, strong zero-shot.
 **BART.** BERT encoder + GPT decoder. Best corruption: text infilling + sentence permutation. Classification: input to both encoder AND decoder. Handles BERT + generation (autoregressive decoder).
 **T5:** seq2seq, read corrupted input bidir + decode masked spans autoregressively, all tasks as text-to-text (prefix).
+
 **DistilBERT,** 3 losses. 1. Masked Language Modeling, MLM: student-predicted masked tokens (predicted labels) vs true labels. 2. Distillation: student vs teacher soft probs (prob distrib over V). 3. Embedding cosine: cos dist between student-teacher sentence embeddings (from the last hidden layer).
 **RoBERTa:** BERT trained longer on more data.
 **SBERT**: On top of a transformer layer, there is a pooling layer, which pools the token level embeddings into a single sentence level embedding. The network uses a siamese architecture, i.e. 2 sentences are embedded separately from each other (the BERT/pooling layers on either side of SBERT is the same network).
@@ -182,12 +185,13 @@ _Why does beam score higher BLEU but worse human judgment?_ Beam maximizes $\log
 **Re-ranking:** generate multiple sequences, rerank by score. Recalibrate: k-NN, combine with 2nd model (MT).
 **KV Cache:** reuse `past_key_values` ⇒ avoid recomputing hidden states at each step. `self.model(**inputs, use_cache=True)`
 
-**Eval metrics.** BLEU (0-1 or 100): n-gram overlap counts (n=1-4, min 1 4-gram match for BLEU>0), MT, no semantics, bad for corpus w/ variable length seq, dep on tokenizer. ROUGE: n-gram recall, summarization, no semantics. BERTScore: contextual sim, depends on BERT. BLEURT: BERT regression, grammar + meaning, needs training. COMET: neural, human correlation, requires source+hyp+ref. LLM-as-judge: rubric-based, flexible, position bias, self-preference.
+**Eval metrics.** BLEU (0-1 or 100): n-gram overlap counts (n=1-4, min 1 4-gram match for BLEU>0), MT, no semantics, bad for corpus w/ variable length seq, dep on tokenizer. ROUGE: n-gram recall, summarization, no semantics. METEOR: synonym matching. BERTScore: contextual sim, depends on BERT. BLEURT: BERT regression, grammar + meaning, needs training. COMET: neural, human correlation, requires source+hyp+ref. LLM-as-judge: rubric-based, flexible, position bias, self-preference.
 Also, Pyramid (summ), SPICE (captioning), SPIDEr (SPICE+CIDEr), Word Mover's Distance (embedding sim). N-gram metrics degrade as tasks become more open-ended. PPL of generated text measures model calibration, not generation quality (repetition scores well). Humans: never compare across studies, clear guidelines, calibration examples.
+Challenge: link evals back to training decisions!
 
 ---
 
-## 9. ICL, Instruction Tuning & Scaling
+## 9. ICL & Prompting
 
 **Emergence:** quantitative changes → qualitative changes. ICL emergent ~175B params.
 
@@ -207,13 +211,32 @@ Self-consistency: This is an ensemble method over reasoning paths. Each sample e
 
 **Soft prompts or prompt tuning:** init special prompt vector(s), prepend to task example, gradient of loss wrt prompt params, update prompt params (rest frozen). More efficient than full ft, multi-task. Less interpretable than discrete prompts.
 
-**Efficient FT:** keep pretrained params frozen, init new FFN layers and adapt only those. Keep FNN limited in #params (= 2\*d\*r), r = rank = FNN hidden dim.
+**Efficient FT:** keep pretrained params frozen, init new FFN layers and adapt only those. Keep FNN limited in #params (= 2·d·r), r = rank = FNN hidden dim.
 **Adapters**: FFN between transformer blocks.
 **LoRA**: FFN alongside.
 
-**Instruction tuning:** (instruction, response) ⇒ 0-shot generalization to unseen tasks. Updates weights.
+---
 
-**Test-time scaling:** more reasoning tokens (compute) ⇒ higher accuracy.
+## 10. RLHF, DPO, GRPO
+
+IT/RLHF: adapt models to new unseen tasks described in natural language.
+Pipeline: 1. train RM from human pref, 2. use RL to optimize a LM against that learned reward. Issues: RM noise (R diff human), RHacking (policy exploits RM weaknesses), RM data costly.
+
+**REINFORCE:** $L_{RL}$ = -R( $\hat Y$) $\sum_t$ log P ( \hat $y_t$ | {x^\*}; { \hat y}{<t} ). Feed into it the LM-generated tokens.
+Reward **scales the loss**: high reward → larger loss → learn to reproduce; low reward → loss near 0 → don't update much. High variance ⇒ subtract baseline $b$: $(r - b)$ without changing expected gradient. **Credit assignment:** reward applied at sequence level (hard to assign per-token). **Variance reduction** via baseline (e.g. BLEU 0–100 range). Stabilize: **joint optimization** $L = L*\text{MLE} + \alpha L\_\text{RL}$ (MLE term promotes fluency since RL alone doesn't always generate readable text).
+
+**RLHF pipeline:** (1) **SFT** on demonstrations (instruction, response) (needed bc near-random policy gives no useful RL signal). (2) **RM** on preference pairs: $L_\text{RM} = -\log\sigma(R(Y_+) - R(yY-))$, (train to max difference between rewards = good/bad demonstration) diff → $\inf$, $\sigma$→1, $\log$→0. (3) **PPO**: limitation of deviation between current & base policy by optimizing diff (log div = diff) $\max \mathbb{E}[R] - \beta\text{KL}[\pi_\theta \| \pi_\text{ref}]$. min(diff, clipping f), PPO clips $\pi_\theta/\pi_\text{ref}$ to $[1-\epsilon, 1+\epsilon]$ (REINFORCE updates are unbounded).
+L = - min (R $\sum_t$ log (Pcurr / Pbase), clipping f), clipping f = (1-eps)R if R>=0, (1-eps)R if R<0.
+**KL term** prevents RH avoiding $\pi_\theta$ drift to OOD text that exploits RM blind spots.
+
+**DPO:** $\mathcal{L} = -\log\sigma \left(\beta\log\frac{\pi_\theta(y^w)}{\pi_\text{ref}(y^w)} - \beta\log\frac{\pi_\theta(y^l)}{\pi_\text{ref}(y^l)}\right)$. Optimize directly on preference data. Learn to do more deviation if positive demo, less if negative. Eliminates explicit RM and RL loop. Less flexible than RLHF in theory, very useful in practice.
+**Implementation:** log-probs via shifted logits: `log_softmax(logits[:,:-1,:])` gathered by `labels[:,1:]`, mask out `-100` positions (prompt tokens). Initial loss ≈ $\log 2 \approx 0.693$ because $\pi_\theta = \pi_\text{ref}$ ⇒ ratios = 0 ⇒ $\sigma(0)=0.5$. Implicit reward = $\beta \log(\pi_\theta / \pi_\text{ref})$. Freeze reference model, disable dropout in both. Reward accuracy > 0.5 = model correctly ranks chosen over rejected.
+
+**RLVR:** binary reward from programmatic check, no RM needed ⇒ no RM noise/RH.
+**GRPO:** 1. sample $G$ group of outputs (demos), 2. verify demos, 3. reward group computation = (indiv reward - mean R group)/std R group = $(R_i - \mu)/\sigma$ = "advantage". L optimizes ratio of current/base policies $\times$ reward, PPO-style epsilon-based clipping factor to limit deviation of current policy from base (start of step), average over every element in the Group. + KL divergence term limit current/ref (ref=SFT model). KL estimator: $\exp(\delta)-\delta-1$ where $\delta = \log\pi_\text{ref} - \log\pi_\theta$ (always $\geq 0$). Fails when all $G$ correct OR all wrong: $\sigma=0$ ⇒ no gradient. GRPO replaces PPO's value network (critic) ⇒ halves memory.
+**Test-time scaling:** (RLVR) more reasoning tokens (compute) ⇒ higher accuracy.
+
+<!-- Model doesn't follow instructions; RM trained on instruction-following; near-random policy gives no useful signal. SFT puts the policy where the RM is informative. -->
 
 <!--
 _Why does RLHF make models sycophantic?_ RM rewards confident answers; KL limits but can't prevent drift; human raters prefer confident wrong over uncertain correct. Calibration is not in the loss.
@@ -221,33 +244,11 @@ _Why does RLHF make models sycophantic?_ RM rewards confident answers; KL limits
 
 ---
 
-## 10. RLHF, DPO, GRPO
-
-RLHF: 1. train RM from human pref, 2. use RL to optimize a LM against that learned reward. Issues: RM noise (diff human), RHacking (policy exploits RM weaknesses).
-
-**REINFORCE:** $\nabla_\theta \mathbb{E}[r] = \mathbb{E}[r(x,y) \cdot \nabla_\theta \log \pi_\theta(y|x)]$. Reward **scales the loss**: high reward → larger loss → learn to reproduce; low reward → loss near 0 → don't update much. High variance ⇒ subtract baseline $b$: $(r - b)$ without changing expected gradient. **Credit assignment:** reward applied at sequence level (hard to assign per-token). **Variance reduction** via baseline (e.g. BLEU 0–100 range). Stabilize: **joint optimization** $\mathcal{L} = \mathcal{L}_\text{MLE} + \alpha\mathcal{L}_\text{RL}$ (MLE term promotes fluency since RL alone doesn't always generate readable text). **Reward gaming:** RL can optimize metrics (higher BLEU/ROUGE) without improving human judgment. Start RL only after model is already somewhat calibrated (SFT first).
-
-**RLHF pipeline:** (1) **SFT** on demonstrations (needed bc near-random policy gives no useful RL signal) → (2) **RM** on preference pairs: $\mathcal{L}_\text{RM} = -\log\sigma(r_\phi(y^w) - r_\phi(y^l))$ (Bradley-Terry) → (3) **PPO**: $\max \mathbb{E}[r_\phi] - \beta\text{KL}[\pi_\theta \| \pi_\text{ref}]$. PPO clips $\pi_\theta/\pi_\text{ref}$ to $[1-\epsilon, 1+\epsilon]$ (REINFORCE updates are unbounded).
-
-**KL term** prevents RH avoiding $\pi_\theta$ drift to OOD text that exploits RM blind spots.
-
-**DPO:** $\mathcal{L} = -\log\sigma\!\left(\beta\log\frac{\pi_\theta(y^w)}{\pi_\text{ref}(y^w)} - \beta\log\frac{\pi_\theta(y^l)}{\pi_\text{ref}(y^l)}\right)$. Eliminates explicit RM and RL loop. Same optimum, simpler.
-
-**DPO implementation:** log-probs via shifted logits: `log_softmax(logits[:,:-1,:])` gathered by `labels[:,1:]`, mask out `-100` positions (prompt tokens). Initial loss ≈ $\log 2 \approx 0.693$ because $\pi_\theta = \pi_\text{ref}$ ⇒ ratios = 0 ⇒ $\sigma(0)=0.5$. Implicit reward = $\beta \log(\pi_\theta / \pi_\text{ref})$. Freeze reference model; disable dropout in both. **Reward accuracy > 0.5** = model correctly ranks chosen over rejected.
-
-**GRPO:** sample $G$ outputs, advantage = $(R_i - \mu)/\sigma$, PPO-style clipping ($\epsilon=0.2$) + KL penalty. KL estimator: $\exp(\delta)-\delta-1$ where $\delta = \log\pi_\text{ref} - \log\pi_\theta$ (always $\geq 0$). **Fails when all $G$ correct OR all wrong** — $\sigma=0$ ⇒ no gradient. GRPO replaces PPO's value network (critic) ⇒ halves memory.
-
-**RLVR:** binary reward from programmatic check — no RM needed (⇒ no RM noise/RH).
-
-<!-- Model doesn't follow instructions; RM trained on instruction-following; near-random policy gives no useful signal. SFT puts the policy where the RM is informative. -->
-
----
-
 ## 11. Dataset Artifacts
 
 **Mitigation:** contrast sets (more examples), adversarial filtering (weaker model finds spurious examples), bias-only ensemble (update params only for samples where bias model failed, e.g. hypothesis-only for NLI), data augmentation, annotation guidelines.
 
-**Pretraining data matters most.** Quality heuristics can be flawed (e.g. filtering "sex" from C4). Good benchmarks: monotonic, low variance (CommonsenseQA, HellaSwag,OpenBookQA, PIQA). Bad: SocialIQA, TruthfulQA. Benchmarks are aggregations — one problem cascades.
+**Pretraining data matters most.** Quality heuristics can be flawed (e.g. filtering "sex" from C4). Good benchmarks: monotonic, low variance (CommonsenseQA, HellaSwag,OpenBookQA, PIQA). Bad: SocialIQA, TruthfulQA. Benchmarks are aggregations: one problem cascades.
 
 **Inter-annotator agreement:** Cohen's κ (2 raters), Fleiss' κ (>2), Krippendorff's α. But filtering by agreement can eliminate legitimate ambiguity.
 
@@ -255,29 +256,20 @@ RLHF: 1. train RM from human pref, 2. use RL to optimize a LM against that learn
 
 ## Derivatives
 
-| Name                | $f$                              | $df/dx$                    |
-| ------------------- | -------------------------------- | -------------------------- |
-| Power rule          | $x^n$                            | $n \cdot x^{n-1}$          |
-| General exp         | $a^x$                            | $a^x \cdot \ln a$          |
-| Log base $a$        | $\log_a x$                       | $1 / (x \ln a)$            |
-| Sigmoid             | $\sigma(x) = 1/(1 + e^{-x})$     | $\sigma(x)(1 - \sigma(x))$ |
-| Tanh                | $\tanh(x)$                       | $1 - \tanh^2(x)$           |
-| ReLU                | $\max(0, x)$                     | $1$ if $x > 0$ else $0$    |
-| Softmax             | $s_i = e^{x_i} / \sum_j e^{x_j}$ | $s_i (\delta_{ij} - s_j)$  |
-| **XEnt + Softmax"** | $-\log s_y$                      | $p_i - y_i$                |
-| KL Divergence       | $\sum_i p_i \log(p_i / q_i)$     | $-p_i / q_i$               |
+| Name                  | $f$                                         | $df/dx$                                      |
+| --------------------- | ------------------------------------------- | -------------------------------------------- |
+| Power rule            | $x^n$                                       | $n \cdot x^{n-1}$                            |
+| General exp           | $a^x$                                       | $a^x \cdot \ln a$                            |
+| Log base $a$          | $\log_a x$                                  | $1 / (x \ln a)$                              |
+| Sigmoid               | $\sigma(x) = 1/(1 + e^{-x})$                | $\sigma(x)(1 - \sigma(x))$                   |
+| Tanh                  | $\tanh(x)$                                  | $1 - \tanh^2(x)$                             |
+| ReLU                  | $\max(0, x)$                                | $1$ if $x > 0$ else $0$                      |
+| Softmax               | $s_i = e^{x_i} / \sum_j e^{x_j}$            | $s_i (\delta_{ij} - s_j)$                    |
+| **XEnt + Softmax"**   | $-\log s_y$                                 | $p_i - y_i$                                  |
+| KL Divergence         | $\sum_i p_i \log(p_i / q_i)$                | $-p_i / q_i$                                 |
+| Attention (V)         | $\text{softmax}(QK^\top / \sqrt d) \cdot V$ | $S^\top \cdot \partial_O L$                  |
+| Attention ($QK^\top$) | $\text{softmax}(QK^\top / \sqrt d) \cdot V$ | $J_{\text{softmax}}(\partial_S L) / \sqrt d$ |
 
 "Softmax Jacobian and log cancel → gradient = **predicted − target**. That's why cross-entropy with softmax is the numerically stable default for classification.
-
-### Layers & Normalization
-
-| Name                  | $f$                                         | $df/dx$                                                                                                                                           |
-| --------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Linear (weights)      | $Wx + b$                                    | $\delta \cdot x^\top$                                                                                                                             |
-| Linear (input)        | $Wx + b$                                    | $W^\top \cdot \delta$                                                                                                                             |
-| Linear (bias)         | $Wx + b$                                    | $\delta$                                                                                                                                          |
-| Layer Norm            | $\gamma \cdot (x - \mu)/\sigma + \beta$     | $(\gamma/\sigma)\left[\partial_{\hat y} L - \text{mean}(\partial_{\hat y} L) - \hat y \cdot \text{mean}(\partial_{\hat y} L \cdot \hat y)\right]$ |
-| Attention (V)         | $\text{softmax}(QK^\top / \sqrt d) \cdot V$ | $S^\top \cdot \partial_O$                                                                                                                         |
-| Attention ($QK^\top$) | $\text{softmax}(QK^\top / \sqrt d) \cdot V$ | $J_{\text{softmax}}(\partial_S L) / \sqrt d$                                                                                                      |
 
 ---
